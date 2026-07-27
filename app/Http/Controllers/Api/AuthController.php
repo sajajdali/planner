@@ -186,12 +186,20 @@ class AuthController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
+            'phone' => ['nullable', 'regex:/^09\d{9}$/', 'unique:users,phone,'.$request->user()->id],
             'profile_emoji' => ['nullable', 'string', 'max:12'],
             'avatar' => ['nullable', 'image', 'max:2048'],
         ]);
 
         $user = $request->user();
         $user->name = $data['name'];
+        if (array_key_exists('email', $data)) {
+            $user->email = $data['email'] ?: $user->email;
+        }
+        if (array_key_exists('phone', $data)) {
+            $user->phone = $data['phone'] ?: null;
+        }
         $user->profile_emoji = $data['profile_emoji'] ?? '🙂';
 
         if ($request->hasFile('avatar')) {

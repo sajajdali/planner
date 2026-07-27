@@ -9,8 +9,11 @@ const auth = useAuthStore();
     <main class="landing-shell" dir="rtl">
         <header class="landing-header">
             <div class="landing-brand">
-                <div class="notebook-logo">ر</div>
-                <span>دفتر برنامه‌ریزی من</span>
+                <div class="notebook-logo brand-icon-mark">
+                    <img :src="'/brand/bejelo-mark.png'" alt="" />
+                    <span>ر</span>
+                </div>
+                <span>دفتر یادداشت</span>
             </div>
             <RouterLink v-if="auth.user" class="landing-profile-chip" to="/profile">
                 <i>
@@ -76,6 +79,6 @@ const auth = useAuthStore();
             <RouterLink :to="auth.user ? '/app' : '/register'">همین حالا شروع کن</RouterLink>
         </section>
 
-        <footer class="landing-footer">دفتر برنامه‌ریزی من — همه‌جا همراه روزهات</footer>
+        <footer class="landing-footer">دفتر یادداشت — همه‌جا همراه روزهات</footer>
     </main>
 </template>

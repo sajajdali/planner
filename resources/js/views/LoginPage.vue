@@ -24,7 +24,10 @@ async function submit() {
     <main class="login-shell" dir="rtl">
         <section class="login-panel">
             <div class="login-brand">
-                <div class="brand-mark">ر</div>
+                <div class="brand-mark brand-icon-mark">
+                    <img :src="'/brand/bejelo-mark.png'" alt="" />
+                    <span>ر</span>
+                </div>
                 <div>
                     <p>برنامه‌ریز روزانه</p>
                     <span>ورود به حساب کاربری</span>

@@ -27,7 +27,10 @@ watch(
 
 <template>
     <div v-if="!auth.checked" class="boot-screen">
-        <div class="brand-mark">ر</div>
+        <div class="brand-mark brand-icon-mark">
+            <img :src="'/brand/bejelo-mark.png'" alt="" />
+            <span>ر</span>
+        </div>
         <span>در حال آماده‌سازی برنامه...</span>
     </div>
     <RouterView v-else />

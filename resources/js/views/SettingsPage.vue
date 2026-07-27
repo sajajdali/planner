@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
-import { useAuthStore } from '../stores/auth';
 
 type Category = { id: number; name: string; color: string; soft_color: string; icon: string; is_default?: boolean; is_active: boolean };
 type CategoryDraft = { name: string; color: string; icon: string; is_active: boolean };
@@ -13,9 +12,9 @@ type FinancialAccount = { id: number; name: string; color: string; initial_balan
 type AccountDraft = { name: string; color: string; initial_balance: string; card_number: string; sheba_number: string; is_active: boolean };
 type FinanceCategory = { id: number; name: string; color: string; soft_color: string; type: 'expense' | 'income'; is_default?: boolean; is_active: boolean };
 type FinanceCategoryDraft = { name: string; color: string; is_active: boolean };
+type SupportTicket = { id: number; subject: string; body: string; status: 'open' | 'answered'; admin_reply?: string | null; created_at: string; replied_at?: string | null };
 
 const router = useRouter();
-const auth = useAuthStore();
 const loading = ref(true);
 const savingId = ref<number | null>(null);
 const savingPriorityId = ref<number | null>(null);
@@ -23,6 +22,7 @@ const categories = ref<Category[]>([]);
 const priorities = ref<PrioritySetting[]>([]);
 const accounts = ref<FinancialAccount[]>([]);
 const financeCategories = ref<FinanceCategory[]>([]);
+const supportTickets = ref<SupportTicket[]>([]);
 const drafts = ref<Record<number, CategoryDraft>>({});
 const priorityDrafts = ref<Record<number, PriorityDraft>>({});
 const accountDrafts = ref<Record<number, AccountDraft>>({});
@@ -38,6 +38,11 @@ const newFinanceCategory = ref<Record<'expense' | 'income', FinanceCategoryDraft
     expense: { name: '', color: '#F43F5E', is_active: true },
     income: { name: '', color: '#16A34A', is_active: true },
 });
+const supportForm = ref({ subject: '', body: '' });
+const supportSaving = ref(false);
+const supportSent = ref(false);
+const supportLoading = ref(false);
+const supportError = ref('');
 
 const palette = ['#2563EB', '#F97316', '#16A34A', '#9B5DE5', '#22D3D0', '#D63384', '#F43F5E', '#0F766E', '#0891B2', '#7C3AED', '#EA580C', '#65A30D', '#BE123C', '#475569'];
 const financeTypes = ['expense', 'income'] as const;
@@ -104,6 +109,25 @@ async function loadCategories() {
     accountDrafts.value = Object.fromEntries(accounts.value.map((account) => [account.id, accountDraftFrom(account)]));
     financeCategoryDrafts.value = Object.fromEntries(financeCategories.value.map((category) => [category.id, financeCategoryDraftFrom(category)]));
     loading.value = false;
+    void loadSupportTickets();
+}
+
+async function loadSupportTickets() {
+    supportLoading.value = true;
+    supportError.value = '';
+    try {
+        const { data } = await api.get('/support-tickets');
+        supportTickets.value = data;
+    } catch {
+        supportError.value = 'تیکت‌ها فعلاً بارگذاری نشدند.';
+    } finally {
+        supportLoading.value = false;
+    }
+}
+
+function ticketDate(value?: string | null) {
+    if (!value) return '';
+    return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
 function draftFrom(category: Category): CategoryDraft {
@@ -377,10 +401,32 @@ async function dropFinanceCategory(targetId: number) {
     financeCategoryDrafts.value = Object.fromEntries(financeCategories.value.map((category) => [category.id, financeCategoryDraftFrom(category)]));
 }
 
-async function logout() {
-    await auth.logout();
-    window.location.href = '/login';
+async function createSupportTicket() {
+    if (!supportForm.value.subject.trim() || !supportForm.value.body.trim()) return;
+
+    supportSaving.value = true;
+    supportSent.value = false;
+    supportError.value = '';
+    try {
+        const { data } = await api.post('/support-tickets', {
+            subject: supportForm.value.subject.trim(),
+            body: supportForm.value.body.trim(),
+        });
+        supportTickets.value = [data, ...supportTickets.value];
+        supportForm.value = { subject: '', body: '' };
+        supportSent.value = true;
+    } catch {
+        supportError.value = 'ثبت تیکت انجام نشد. دوباره تلاش کن.';
+    } finally {
+        supportSaving.value = false;
+    }
 }
+
+async function deleteSupportTicket(ticket: SupportTicket) {
+    await api.delete(`/support-tickets/${ticket.id}`);
+    supportTickets.value = supportTickets.value.filter((item) => item.id !== ticket.id);
+}
+
 </script>
 
 <template>
@@ -714,6 +760,52 @@ async function logout() {
                         </div>
                     </article>
                 </section>
+
+                <section class="settings-support-section">
+                    <article class="support-intro">
+                        <span>پشتیبانی</span>
+                        <strong>اگه مشکلی داشتی، از اینجا تیکت بزن</strong>
+                        <p>درخواستت برای مدیریت ثبت می‌شود و پاسخ همین‌جا نمایش داده می‌شود.</p>
+                        <button type="button" @click="router.push('/support/admin')">پنل مدیریت تیکت‌ها</button>
+                    </article>
+
+                    <article class="support-form-card">
+                        <label>
+                            <span>موضوع تیکت</span>
+                            <input v-model="supportForm.subject" maxlength="160" placeholder="مثلاً مشکل در ثبت تراکنش" />
+                        </label>
+                        <label>
+                            <span>توضیحات</span>
+                            <textarea v-model="supportForm.body" maxlength="4000" placeholder="مشکل یا سوالت را کامل بنویس..."></textarea>
+                        </label>
+                        <p v-if="supportSent" class="support-success">تیکت ثبت شد؛ پاسخ مدیریت همین‌جا می‌آید.</p>
+                        <p v-if="supportError" class="support-error">{{ supportError }}</p>
+                        <button :disabled="supportSaving || !supportForm.subject.trim() || !supportForm.body.trim()" @click="createSupportTicket">
+                            {{ supportSaving ? 'در حال ثبت...' : 'ثبت تیکت' }}
+                        </button>
+                    </article>
+
+                    <div class="support-ticket-list">
+                        <div v-if="supportLoading" class="support-empty">در حال بارگذاری تیکت‌ها...</div>
+                        <article v-for="ticket in supportTickets" :key="ticket.id" :class="ticket.status">
+                            <header>
+                                <strong>{{ ticket.subject }}</strong>
+                                <div>
+                                    <span>{{ ticket.status === 'answered' ? 'پاسخ داده شده' : 'در انتظار پاسخ' }}</span>
+                                    <button type="button" title="حذف تیکت" aria-label="حذف تیکت" @click="deleteSupportTicket(ticket)">×</button>
+                                </div>
+                            </header>
+                            <p>{{ ticket.body }}</p>
+                            <small>{{ ticketDate(ticket.created_at) }}</small>
+                            <div v-if="ticket.admin_reply" class="support-reply">
+                                <b>پاسخ مدیریت</b>
+                                <p>{{ ticket.admin_reply }}</p>
+                                <small>{{ ticketDate(ticket.replied_at) }}</small>
+                            </div>
+                        </article>
+                        <div v-if="!supportLoading && !supportTickets.length" class="support-empty">هنوز تیکتی ثبت نشده.</div>
+                    </div>
+                </section>
             </main>
 
             <div v-else class="settings-loading">در حال بارگذاری تنظیمات...</div>
@@ -740,7 +832,8 @@ async function logout() {
 .finance-category-settings{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.finance-category-panel{border:2px solid #3a2e1f;border-radius:16px;background:#fff;box-shadow:4px 4px 0 #3a2e1f;overflow:hidden}.finance-category-panel header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff4e6;border-bottom:2px solid #eadfbe}.finance-category-panel.income header{background:#ecfdf5}.finance-category-panel header span{font-size:12px;color:#7a6a4f;font-weight:900}.finance-category-panel header strong{display:block;margin-top:2px;font-family:Lalezar,Vazirmatn,sans-serif;font-size:20px;color:#3a2e1f}.finance-category-new{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:14px 16px;border-bottom:1px dashed rgba(58,46,31,.24);background:linear-gradient(90deg,color-mix(in srgb,var(--c) 8%,white),#fff)}.finance-category-new input{height:40px;border:2px solid #3a2e1f;border-radius:11px;background:#fffbf0;padding:0 10px;font-weight:900;color:#3a2e1f;outline:0}.finance-category-new .settings-swatches{grid-column:1/-1}.finance-category-new>button{height:40px;border:2px solid #3a2e1f;border-radius:11px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;padding:0 12px;font-weight:900;cursor:pointer}.finance-category-new>button:disabled{opacity:.45}.finance-category-list{display:grid;gap:10px;padding:14px 16px}.finance-category-settings-card{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:9px;align-items:center;border:2px solid #3a2e1f;border-radius:14px;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 12%,white),#fff);box-shadow:3px 3px 0 #3a2e1f;padding:10px}.finance-category-settings-card.inactive{opacity:.58;filter:grayscale(.35)}.finance-category-settings-card.dragging{opacity:.42}.finance-category-settings-card i{width:16px;height:16px;border-radius:50%;background:var(--c);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 18%,white)}.finance-category-settings-card input{min-width:0;height:36px;border:0;border-bottom:1px dashed rgba(58,46,31,.3);background:transparent;font-weight:900;color:#3a2e1f;outline:0}.finance-category-settings-card .settings-swatches{grid-column:1/-1}.finance-category-settings-card footer{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px dashed rgba(58,46,31,.2)}.finance-category-settings-card footer small{margin-left:auto;color:#7a6a4f;font-size:10.5px;font-weight:900}.finance-category-settings-card footer button{height:31px;border:2px solid #3a2e1f;border-radius:10px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;padding:0 12px;font-weight:900;cursor:pointer}.finance-category-settings-card footer button:disabled{opacity:.45}.finance-category-settings-card footer .delete{background:#fff;color:#dc2626}
 .finance-category-settings{gap:18px;margin-top:22px}.finance-category-panel{border:1.5px solid #eadfbe;border-radius:14px;background:rgba(255,255,255,.74);box-shadow:3px 3px 0 rgba(58,46,31,.9);backdrop-filter:blur(3px)}.finance-category-panel header{padding:13px 15px;background:linear-gradient(90deg,rgba(255,217,61,.16),rgba(255,255,255,.78));border-bottom:1px solid #efe3c4}.finance-category-panel.income header{background:linear-gradient(90deg,rgba(22,163,74,.12),rgba(255,255,255,.78))}.finance-category-panel header div{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%}.finance-category-panel header span{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#3a2e1f}.finance-category-panel header span::before{content:'';width:10px;height:10px;border-radius:50%;background:#f97316;box-shadow:0 0 0 4px rgba(249,115,22,.13)}.finance-category-panel.income header span::before{background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.13)}.finance-category-panel header strong{margin:0;padding:4px 10px;border:1px solid #eadfbe;border-radius:999px;background:#fffbf0;font-family:Vazirmatn,sans-serif;font-size:11px;color:#7a6a4f}.finance-category-new{grid-template-columns:minmax(0,1fr) 78px;gap:8px;padding:12px 14px;background:#fff;border-bottom:1px dashed rgba(58,46,31,.16)}.finance-category-new input{height:38px;border:1.5px solid #eadfbe;border-radius:12px;background:#fffbf0;box-shadow:none;font-size:12px}.finance-category-new input:focus{border-color:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 15%,transparent)}.finance-category-new .settings-swatches{gap:5px}.finance-category-new .settings-swatches button,.finance-category-settings-card .settings-swatches button{width:18px;height:18px;border:1.5px solid #3a2e1f;border-radius:6px;box-shadow:none}.finance-category-new>button{height:38px;border:1.5px solid #3a2e1f;border-radius:12px;background:var(--c);color:#fff;box-shadow:2px 2px 0 #3a2e1f;font-size:12px}.finance-category-list{gap:8px;padding:12px 14px}.finance-category-settings-card{grid-template-columns:26px 12px minmax(0,1fr) auto;gap:8px;border:1.5px solid #eadfbe;border-right:5px solid var(--c);border-radius:13px;background:#fff;box-shadow:none;padding:9px 10px}.finance-category-settings-card:hover{border-color:color-mix(in srgb,var(--c) 42%,#eadfbe);box-shadow:2px 2px 0 rgba(58,46,31,.16)}.finance-category-settings-card .drag-handle{width:26px;height:26px;border:1.5px solid #eadfbe;border-radius:9px;background:#fffbf0;box-shadow:none;color:#8a7a5b;font-size:12px}.finance-category-settings-card i{width:10px;height:10px;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 16%,white)}.finance-category-settings-card input{height:30px;border:0;font-size:13px}.finance-category-settings-card .active-toggle{padding:3px 7px!important;border-color:#eadfbe;background:#fffbf0}.finance-category-settings-card .active-toggle input{width:14px!important;height:14px!important}.finance-category-settings-card .settings-swatches{gap:5px;padding:2px 34px 0 0}.finance-category-settings-card footer{padding-top:7px;border-top:1px dashed rgba(58,46,31,.14)}.finance-category-settings-card footer small{font-size:10px;color:#9a8b6a}.finance-category-settings-card footer button{height:28px;border:1.5px solid #3a2e1f;border-radius:9px;box-shadow:none;padding:0 10px;font-size:11px}.finance-category-settings-card footer button:not(.delete){background:#fffbf0;color:#0f766e}.finance-category-settings-card footer .delete{color:#dc2626;background:#fff}.finance-category-settings-card.inactive{opacity:.45}.finance-category-settings-card.dragging{transform:scale(.99)}
 .new-card{border-style:dashed;background:#fff}.settings-loading{min-height:320px;display:grid;place-items:center;font-weight:900}
+.settings-support-section{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;margin-top:30px;padding-top:26px;border-top:2px dashed #eadfbe}.support-intro,.support-form-card,.support-ticket-list article,.support-empty{border:2px solid #3a2e1f;border-radius:16px;background:#fff;box-shadow:4px 4px 0 #3a2e1f}.support-intro{align-self:start;display:grid;gap:8px;padding:18px;background:linear-gradient(135deg,#fff,#eef2ff)}.support-intro span{width:max-content;border:2px solid #7c3aed;border-radius:999px;background:#f3e8ff;color:#6d28d9;padding:4px 11px;font-size:11px;font-weight:900}.support-intro strong{font-family:Lalezar,Vazirmatn,sans-serif;font-size:27px;line-height:1.5}.support-intro p{margin:0;color:#7a6a4f;font-size:13px;font-weight:900;line-height:1.9}.support-intro button{height:42px;margin-top:6px;border:2px solid #3a2e1f;border-radius:12px;background:#7c3aed;color:#fff;box-shadow:3px 3px 0 #3a2e1f;font-weight:900}.support-form-card{display:grid;gap:12px;padding:16px;background:linear-gradient(180deg,#fff,#fffbf0)}.support-form-card label{display:grid;gap:7px;color:#4b3b22;font-size:12px;font-weight:900}.support-form-card input,.support-form-card textarea{border:2px solid #3a2e1f;border-radius:13px;background:#fffbf0;font-weight:900;color:#3a2e1f}.support-form-card textarea{min-height:112px;line-height:1.9}.support-form-card>button{height:46px;border:2px solid #3a2e1f;border-radius:13px;background:#22d3d0;color:#fff;box-shadow:3px 3px 0 #3a2e1f;font-weight:900}.support-form-card>button:disabled{opacity:.45}.support-success,.support-error{margin:0;font-size:12px;font-weight:900}.support-success{color:#15803d}.support-error{color:#dc2626}.support-ticket-list{grid-column:1/-1;display:grid;gap:10px}.support-ticket-list article{display:grid;gap:8px;padding:14px}.support-ticket-list article.answered{background:#f8fafc;box-shadow:3px 3px 0 rgba(58,46,31,.72)}.support-ticket-list header{display:flex;align-items:center;justify-content:space-between;gap:10px}.support-ticket-list header>div{display:inline-flex;align-items:center;gap:7px;flex-shrink:0}.support-ticket-list strong{font-family:Lalezar,Vazirmatn,sans-serif;font-size:22px}.support-ticket-list header span{height:28px;display:inline-flex;align-items:center;border-radius:999px;padding:0 10px;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:900}.support-ticket-list header button{width:28px;height:28px;display:grid;place-items:center;border:1.5px solid #fecaca;border-radius:999px;background:#fff;color:#dc2626;font-family:Arial,sans-serif;font-size:18px;font-weight:900;line-height:0}.support-ticket-list article.answered header span{background:#dcfce7;color:#15803d}.support-ticket-list p{margin:0;color:#4b3b22;font-size:13px;font-weight:800;line-height:1.9;white-space:pre-wrap}.support-ticket-list small{color:#9a8b6a;font-size:10.5px;font-weight:900}.support-reply{margin-top:4px;padding:12px;border:1.5px dashed #16a34a;border-radius:13px;background:#ecfdf5}.support-reply b{display:block;margin-bottom:5px;color:#15803d}.support-empty{min-height:90px;display:grid;place-items:center;color:#9a8b6a;font-weight:900}
 @media(max-width:900px){.category-settings-grid,.account-settings-grid,.finance-category-settings{grid-template-columns:repeat(2,1fr)}.priority-settings-grid{grid-template-columns:repeat(2,1fr)}.settings-hero{align-items:flex-start;flex-direction:column}.settings-preview,.priority-preview{justify-content:flex-start}}
-@media(max-width:700px){.finance-category-settings{grid-template-columns:1fr}.finance-category-settings-card{grid-template-columns:auto minmax(0,1fr) auto}.finance-category-settings-card i{display:none}}
+@media(max-width:700px){.finance-category-settings,.settings-support-section{grid-template-columns:1fr}.finance-category-settings-card{grid-template-columns:auto minmax(0,1fr) auto}.finance-category-settings-card i{display:none}.support-ticket-list{grid-column:auto}}
 @media(max-width:560px){.settings-shell{padding:18px 8px 34px}.settings-page{padding:24px 12px 30px}.category-settings-grid,.priority-settings-grid,.account-settings-grid,.finance-category-settings{grid-template-columns:1fr}.settings-title{font-size:28px}.settings-header{align-items:flex-start}.settings-actions{width:100%;justify-content:space-between}.settings-hero{padding:14px}.settings-drawer{left:12px;top:88px}}
 </style>

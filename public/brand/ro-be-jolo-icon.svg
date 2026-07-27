@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="رو به جلو">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#f2f0ea"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff1f72"/>
+      <stop offset="1" stop-color="#d70a67"/>
+    </linearGradient>
+    <linearGradient id="yellow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffc821"/>
+      <stop offset="1" stop-color="#ff8700"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#78e14b"/>
+      <stop offset="1" stop-color="#10a83f"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12d8d1"/>
+      <stop offset="1" stop-color="#05a8c7"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#041146" flood-opacity=".2"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <g filter="url(#shadow)" transform="translate(34 28) scale(.94)">
+    <path d="M250 106c12-22 40-30 62-17l178 104c26 15 26 53 0 68L312 365c-22 13-50 5-62-17-12-21-5-49 16-62l94-55-94-55c-21-13-28-41-16-70z" fill="url(#pink)"/>
+    <path d="M240 254c12-21 40-29 62-16l78 46-78 46c-22 13-50 5-62-16-12-22-5-50 16-62l-16 2z" fill="url(#green)"/>
+    <path d="M162 205h248c18 0 32 14 32 32s-14 32-32 32H162c-18 0-32-14-32-32s14-32 32-32z" fill="url(#yellow)"/>
+    <path d="M84 275h45c13 0 23 10 23 23s-10 23-23 23H84c-13 0-23-10-23-23s10-23 23-23z" fill="url(#cyan)"/>
+    <path d="M84 154h45c13 0 23 10 23 23s-10 23-23 23H84c-13 0-23-10-23-23s10-23 23-23z" fill="url(#pink)"/>
+    <path d="M174 154h45c13 0 23 10 23 23s-10 23-23 23h-45c-13 0-23-10-23-23s10-23 23-23z" fill="url(#pink)"/>
+  </g>
+</svg>

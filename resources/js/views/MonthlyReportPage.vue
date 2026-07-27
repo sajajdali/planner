@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
 import { jalaaliMonthLength, toGregorian, toJalaali } from 'jalaali-js';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
-import { useAuthStore } from '../stores/auth';
 
 type CategoryStat = { id: number; name: string; color: string; soft_color: string; icon: string; total: number; done: number; actual_seconds: number };
 type DayStat = { date: string; tasks_total: number; tasks_done: number; actual_seconds: number; meals_total: number; meals_done: number; routine_total: number; routine_done: number; wake_time: string | null; sleep_time: string | null; income: number; expense: number };
@@ -19,8 +17,6 @@ type ReportPayload = {
     meals: { total: number; done: number };
 };
 
-const router = useRouter();
-const auth = useAuthStore();
 const loading = ref(true);
 const today = toJalaali(new Date());
 const selected = ref({ jy: today.jy, jm: today.jm });
@@ -163,11 +159,6 @@ function goThisMonth() {
     selected.value = { jy: today.jy, jm: today.jm };
 }
 
-async function logout() {
-    await auth.logout();
-    window.location.href = '/login';
-}
-
 function gregorianString(jy: number, jm: number, jd: number) {
     const g = toGregorian(jy, jm, jd);
     return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
@@ -261,12 +252,12 @@ watch(selected, loadReport);
                     <div class="page-subtitle">مرور کامل عملکردت در طول ماه</div>
                 </div>
                 <div class="top-actions">
-                    <button class="icon-btn cyan" @click="changeMonth(1)" aria-label="ماه بعد">
-                        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg>
-                    </button>
-                    <div class="month-chip">{{ monthLabel }}</div>
                     <button class="icon-btn yellow" @click="changeMonth(-1)" aria-label="ماه قبل">
                         <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+                    </button>
+                    <div class="month-chip">{{ monthLabel }}</div>
+                    <button class="icon-btn cyan" @click="changeMonth(1)" aria-label="ماه بعد">
+                        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg>
                     </button>
                     <button v-if="!isCurrentMonth" class="today-btn" @click="goThisMonth">ماه جاری</button>
                     <AppMenu />

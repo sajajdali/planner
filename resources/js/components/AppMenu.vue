@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
@@ -7,6 +7,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const open = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
 
 const avatarUrl = computed(() => auth.user?.avatar_url || null);
 const avatarText = computed(() => auth.user?.profile_emoji || auth.user?.name?.slice(0, 1) || 'م');
@@ -23,15 +24,38 @@ async function go(path: string) {
     open.value = false;
     await router.push(path);
 }
+
+async function logout() {
+    open.value = false;
+    await auth.logout();
+    await router.push('/login');
+}
+
+function closeOnOutsideClick(event: MouseEvent) {
+    if (!open.value) return;
+
+    const target = event.target;
+    if (target instanceof Node && menuRef.value?.contains(target)) return;
+
+    open.value = false;
+}
+
+onMounted(() => {
+    document.addEventListener('click', closeOnOutsideClick, true);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', closeOnOutsideClick, true);
+});
 </script>
 
 <template>
-    <div class="app-menu-wrap">
+    <div ref="menuRef" class="app-menu-wrap">
         <button class="shared-menu-button" :class="{ active: open }" aria-label="بازکردن منو" @click="open = !open">
             <span></span><span></span><span></span>
         </button>
         <aside v-if="open" class="shared-drawer">
-            <div class="shared-user">
+            <button class="shared-user" type="button" @click="go('/profile')">
                 <i>
                     <img v-if="avatarUrl" :src="avatarUrl" alt="" />
                     <b v-else>{{ avatarText }}</b>
@@ -40,7 +64,7 @@ async function go(path: string) {
                     <strong>{{ firstName }}</strong>
                     <small>{{ auth.user?.phone || auth.user?.email }}</small>
                 </div>
-            </div>
+            </button>
             <button
                 v-for="item in items"
                 :key="item.path"
@@ -52,11 +76,15 @@ async function go(path: string) {
                 <i><svg viewBox="0 0 24 24"><path :d="item.icon"></path></svg></i>
                 <span>{{ item.label }}</span>
             </button>
+            <button class="shared-logout" type="button" @click="logout">
+                <i><svg viewBox="0 0 24 24"><path d="M10 17l-5-5 5-5M5 12h12M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"></path></svg></i>
+                <span>خروج از حساب</span>
+            </button>
         </aside>
     </div>
 </template>
 
 <style scoped>
-.app-menu-wrap{position:relative;display:inline-flex}.shared-menu-button{width:42px;height:40px;border:3px solid #3a2e1f;border-radius:12px;background:#fff;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:0 9px;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.shared-menu-button span{height:4px;background:#3a2e1f;border-radius:999px}.shared-menu-button.active{background:#ffd93d}.shared-drawer{position:absolute;top:52px;left:0;z-index:80;display:grid;gap:8px;min-width:260px;padding:12px;border:3px solid #3a2e1f;border-radius:16px;background:#fffaf0;box-shadow:6px 6px 0 #3a2e1f}.shared-user{display:flex;align-items:center;gap:10px;min-width:0;padding:10px;border:1.5px dashed #eadfbe;border-radius:14px;background:#fff}.shared-user i{width:46px;height:46px;border:2px solid #3a2e1f;border-radius:14px;background:#22d3d0;display:grid;place-items:center;overflow:hidden;flex-shrink:0}.shared-user img{width:100%;height:100%;object-fit:cover}.shared-user b{font-size:22px;font-style:normal}.shared-user div{min-width:0}.shared-user strong,.shared-user small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.shared-user strong{font-size:14px}.shared-user small{color:#8a7a5b;font-size:10px;margin-top:2px}.shared-drawer button{height:44px;border:0;border-radius:12px;background:color-mix(in srgb,var(--c) 16%,white);display:flex;align-items:center;gap:10px;padding:0 10px;color:#3a2e1f;font-weight:900;cursor:pointer;text-align:right}.shared-drawer button.active{outline:2px solid var(--c);background:color-mix(in srgb,var(--c) 28%,white)}.shared-drawer button i{width:30px;height:30px;border:2px solid #3a2e1f;border-radius:10px;background:var(--c);display:grid;place-items:center;flex-shrink:0;box-shadow:1px 1px 0 #3a2e1f}.shared-drawer svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-@media(max-width:560px){.shared-drawer{left:0;min-width:238px}}
+.app-menu-wrap{position:relative;display:inline-flex}.shared-menu-button{width:42px;height:40px;border:3px solid #3a2e1f;border-radius:12px;background:#fff;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:0 9px;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.shared-menu-button span{height:4px;background:#3a2e1f;border-radius:999px}.shared-menu-button.active{background:#ffd93d}.shared-drawer{position:absolute;top:52px;left:0;z-index:80;display:grid;gap:8px;min-width:260px;padding:12px;border:3px solid #3a2e1f;border-radius:16px;background:#fffaf0;box-shadow:6px 6px 0 #3a2e1f}.shared-user{display:flex;align-items:center;gap:10px;min-width:0;padding:10px;border:1.5px dashed #eadfbe;border-radius:14px;background:#fff}.shared-user i{width:46px;height:46px;border:2px solid #3a2e1f;border-radius:14px;background:#22d3d0;display:grid;place-items:center;overflow:hidden;flex-shrink:0}.shared-user img{width:100%;height:100%;object-fit:cover}.shared-user b{font-size:22px;font-style:normal}.shared-user div{min-width:0}.shared-user strong,.shared-user small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.shared-user strong{font-size:14px}.shared-user small{color:#8a7a5b;font-size:10px;margin-top:2px}.shared-drawer button{height:44px;border:0;border-radius:12px;background:color-mix(in srgb,var(--c) 16%,white);display:flex;align-items:center;gap:10px;padding:0 10px;color:#3a2e1f;font-weight:900;cursor:pointer;text-align:right}.shared-drawer button.active{outline:2px solid var(--c);background:color-mix(in srgb,var(--c) 28%,white)}.shared-drawer button i{width:30px;height:30px;border:2px solid #3a2e1f;border-radius:10px;background:var(--c);display:grid;place-items:center;flex-shrink:0;box-shadow:1px 1px 0 #3a2e1f}.shared-drawer svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.shared-drawer .shared-logout{--c:#DC2626;margin-top:4px;border-top:1.5px dashed #eadfbe;border-radius:14px;background:linear-gradient(135deg,#fee2e2,#fff);color:#991b1b}.shared-drawer .shared-logout i{background:#dc2626}.shared-drawer .shared-logout:hover{background:linear-gradient(135deg,#fecaca,#fff7ed);transform:translate(-1px,-1px);box-shadow:2px 2px 0 rgba(58,46,31,.25)}
+@media(max-width:640px){.app-menu-wrap{position:relative;z-index:90}.shared-menu-button{width:44px;height:44px;background:#ffd93d}.shared-drawer{position:absolute;top:56px;left:0;right:auto;width:min(340px,calc(100vw - 24px));min-width:0;max-height:calc(100vh - 86px);overflow:auto}.shared-drawer button{min-height:52px;height:auto;font-size:16px}.shared-drawer button i{width:36px;height:36px}.shared-drawer svg{width:19px;height:19px}}
 </style>

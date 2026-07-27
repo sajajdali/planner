@@ -6,6 +6,7 @@ import LandingPage from './views/LandingPage.vue';
 import MonthlyReportPage from './views/MonthlyReportPage.vue';
 import ProfilePage from './views/ProfilePage.vue';
 import SettingsPage from './views/SettingsPage.vue';
+import SupportAdminPage from './views/SupportAdminPage.vue';
 
 export default createRouter({
     history: createWebHistory(),
@@ -18,6 +19,7 @@ export default createRouter({
         { path: '/reports/monthly', component: MonthlyReportPage },
         { path: '/settings', component: SettingsPage },
         { path: '/profile', component: ProfilePage },
+        { path: '/support/admin', component: SupportAdminPage },
         { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
 });

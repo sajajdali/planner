@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
+import AppMenu from '../components/AppMenu.vue';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
+const router = useRouter();
 const fileInput = ref<HTMLInputElement | null>(null);
 const name = ref(auth.user?.name ?? '');
+const email = ref(auth.user?.email ?? '');
+const phone = ref(auth.user?.phone ?? '');
 const emoji = ref(auth.user?.profile_emoji ?? '🙂');
 const avatarFile = ref<File | null>(null);
 const avatarPreview = ref<string | null>(null);
@@ -18,6 +22,8 @@ const welcomeName = computed(() => auth.user?.name?.split(' ')[0] || name.value.
 
 watch(() => auth.user, (user) => {
     name.value = user?.name ?? '';
+    email.value = user?.email ?? '';
+    phone.value = user?.phone ?? '';
     emoji.value = user?.profile_emoji ?? '🙂';
 }, { deep: true });
 
@@ -57,6 +63,8 @@ async function saveProfile() {
     try {
         await auth.updateProfile({
             name: name.value.trim(),
+            email: email.value.trim(),
+            phone: phone.value.trim(),
             profile_emoji: emoji.value.trim() || '🙂',
             avatar: avatarFile.value,
         });
@@ -67,10 +75,15 @@ async function saveProfile() {
         error.value = 'ذخیره پروفایل انجام نشد. عکس یا اطلاعات را بررسی کن.';
     }
 }
+
+async function logout() {
+    await auth.logout();
+    await router.push('/login');
+}
 </script>
 
 <template>
-    <main class="profile-shell" dir="rtl">
+    <main class="profile-shell profile-polished" dir="rtl">
         <section class="profile-card">
             <i class="landing-tape yellow"></i>
             <i class="landing-tape cyan"></i>
@@ -79,23 +92,45 @@ async function saveProfile() {
                 <div>
                     <span>پروفایل</span>
                     <h1>{{ welcomeName }} خوش آمدید</h1>
+                    <p>اطلاعات حساب و تصویرت را همین‌جا مرتب کن.</p>
                 </div>
-                <RouterLink to="/app">ورود به برنامه</RouterLink>
+                <div class="profile-head-actions">
+                    <AppMenu />
+                    <RouterLink to="/app">داشبورد</RouterLink>
+                </div>
             </header>
 
             <div class="profile-body">
-                <button type="button" class="avatar-safe-zone" @click="chooseAvatar">
-                    <span class="avatar-guide">منطقه امن عکس</span>
-                    <img v-if="avatarUrl" :src="avatarUrl" alt="تصویر پروفایل" />
-                    <strong v-else>{{ emoji || initials }}</strong>
-                    <small>برای آپلود بزن</small>
-                </button>
+                <aside class="profile-showcase">
+                    <button type="button" class="avatar-safe-zone" @click="chooseAvatar">
+                        <span class="avatar-guide">عکس پروفایل</span>
+                        <img v-if="avatarUrl" :src="avatarUrl" alt="تصویر پروفایل" />
+                        <strong v-else>{{ emoji || initials }}</strong>
+                        <small>برای تغییر عکس بزن</small>
+                    </button>
+                    <div class="profile-id-card">
+                        <strong>{{ name || 'نام شما' }}</strong>
+                        <span>{{ phone || email || 'اطلاعات تماس ثبت نشده' }}</span>
+                    </div>
+                    <button type="button" class="profile-logout-card" @click="logout">
+                        <i><svg viewBox="0 0 24 24"><path d="M10 17l-5-5 5-5M5 12h12M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"></path></svg></i>
+                        <span>خروج از حساب</span>
+                    </button>
+                </aside>
                 <input ref="fileInput" type="file" accept="image/*" hidden @change="onAvatarChange" />
 
                 <form class="profile-form" @submit.prevent="saveProfile">
                     <label>
                         نام نمایشی
                         <input v-model="name" placeholder="مثلاً: سجاد" required />
+                    </label>
+                    <label>
+                        ایمیل
+                        <input v-model="email" type="email" placeholder="name@example.com" />
+                    </label>
+                    <label>
+                        شماره موبایل
+                        <input v-model="phone" inputmode="numeric" placeholder="09123456789" />
                     </label>
                     <label>
                         ایموجی وقتی عکس نداری

@@ -174,8 +174,11 @@ function backOneStep() {
             <i class="landing-tape cyan"></i>
 
             <div class="auth-brand">
-                <div class="notebook-logo">ر</div>
-                <strong>دفتر برنامه‌ریزی من</strong>
+                <div class="notebook-logo brand-icon-mark">
+                    <img :src="'/brand/bejelo-mark.png'" alt="" />
+                    <span>ر</span>
+                </div>
+                <strong>دفتر یادداشت</strong>
                 <span>ورود و عضویت با کد تایید</span>
             </div>
 

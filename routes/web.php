@@ -33,7 +33,14 @@ Route::prefix('api')->group(function () {
         Route::get('/finance-dashboard', [PlannerController::class, 'financeDashboard']);
         Route::post('/finance-obligations', [PlannerController::class, 'storeFinanceObligation']);
         Route::post('/finance-obligations/{obligation}/pay', [PlannerController::class, 'payFinanceObligation']);
+        Route::delete('/finance-obligation-payments/{payment}', [PlannerController::class, 'destroyFinanceObligationPayment']);
+        Route::get('/support-tickets', [PlannerController::class, 'supportTickets']);
+        Route::post('/support-tickets', [PlannerController::class, 'storeSupportTicket']);
+        Route::delete('/support-tickets/{ticket}', [PlannerController::class, 'destroySupportTicket']);
+        Route::get('/admin/support-tickets', [PlannerController::class, 'adminSupportTickets']);
+        Route::put('/admin/support-tickets/{ticket}/reply', [PlannerController::class, 'replySupportTicket']);
         Route::post('/tasks', [PlannerController::class, 'storeTask']);
+        Route::put('/tasks/{task}', [PlannerController::class, 'updateTask']);
         Route::post('/tasks/reorder', [PlannerController::class, 'reorderTasks']);
         Route::post('/tasks/{task}/complete', [PlannerController::class, 'complete']);
         Route::post('/tasks/{task}/refer', [PlannerController::class, 'referTask']);

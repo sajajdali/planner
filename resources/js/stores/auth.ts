@@ -73,11 +73,13 @@ export const useAuthStore = defineStore('auth', {
                 this.loading = false;
             }
         },
-        async updateProfile(payload: { name: string; profile_emoji: string; avatar?: File | null }) {
+        async updateProfile(payload: { name: string; email?: string; phone?: string; profile_emoji: string; avatar?: File | null }) {
             this.loading = true;
             try {
                 const form = new FormData();
                 form.append('name', payload.name);
+                if (payload.email !== undefined) form.append('email', payload.email);
+                if (payload.phone !== undefined) form.append('phone', payload.phone);
                 form.append('profile_emoji', payload.profile_emoji);
                 if (payload.avatar) form.append('avatar', payload.avatar);
 

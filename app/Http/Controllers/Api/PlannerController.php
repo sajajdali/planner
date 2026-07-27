@@ -16,6 +16,7 @@ use App\Models\FollowUp;
 use App\Models\MealEntry;
 use App\Models\PrioritySetting;
 use App\Models\RoutineItem;
+use App\Models\SupportTicket;
 use App\Models\Task;
 use App\Models\TaskTimeSession;
 use Carbon\Carbon;
@@ -77,7 +78,7 @@ class PlannerController extends Controller
             ->get();
 
         $activeTimer = TaskTimeSession::query()
-            ->with('task')
+            ->with('task.category')
             ->where('user_id', $user->id)
             ->whereIn('status', ['running', 'paused'])
             ->latest()
@@ -98,6 +99,10 @@ class PlannerController extends Controller
                 'id' => $activeTimer->id,
                 'task_id' => $activeTimer->task_id,
                 'task_title' => $activeTimer->task?->title,
+                'task_date' => $activeTimer->task?->task_date ? $this->dateKey($activeTimer->task->task_date) : null,
+                'category_id' => $activeTimer->task?->category_id,
+                'category_name' => $activeTimer->task?->category?->name,
+                'category_color' => $activeTimer->task?->category?->color,
                 'started_at' => $activeTimer->started_at,
                 'duration_seconds' => $activeTimer->duration_seconds,
                 'status' => $activeTimer->status,
@@ -296,9 +301,8 @@ class PlannerController extends Controller
             ->get();
 
         $obligations = FinanceObligation::query()
-            ->with(['account', 'payments'])
+            ->with(['account', 'payments.expense.account'])
             ->where('user_id', $user->id)
-            ->where('status', 'active')
             ->latest()
             ->get();
 
@@ -376,32 +380,117 @@ class PlannerController extends Controller
             ->orderBy('sort_order')
             ->firstOrFail();
 
-        $expense = Expense::create([
-            'user_id' => $request->user()->id,
-            'expense_category_id' => $category->id,
-            'financial_account_id' => $account?->id,
-            'title' => 'پرداخت '.$obligation->title,
-            'amount' => $amount,
-            'type' => 'expense',
-            'expense_date' => Carbon::parse($data['paid_date'])->toDateString(),
-            'note' => $data['note'] ?? ($obligation->type === 'installment' ? 'پرداخت قسط' : 'پرداخت بدهی'),
-        ]);
+        $obligation = DB::transaction(function () use ($request, $obligation, $category, $account, $amount, $data) {
+            $paidDate = Carbon::parse($data['paid_date'])->toDateString();
 
-        FinanceObligationPayment::create([
-            'finance_obligation_id' => $obligation->id,
-            'expense_id' => $expense->id,
-            'paid_date' => Carbon::parse($data['paid_date'])->toDateString(),
-            'amount' => $amount,
-            'note' => $data['note'] ?? null,
-        ]);
+            $expense = Expense::create([
+                'user_id' => $request->user()->id,
+                'expense_category_id' => $category->id,
+                'financial_account_id' => $account?->id,
+                'title' => 'پرداخت '.$obligation->title,
+                'amount' => $amount,
+                'type' => 'expense',
+                'expense_date' => $paidDate,
+                'note' => $data['note'] ?? ($obligation->type === 'installment' ? 'پرداخت قسط' : 'پرداخت بدهی'),
+            ]);
 
-        $obligation = $obligation->fresh(['account', 'payments']);
-        if ($this->obligationRemaining($obligation) <= 0) {
-            $obligation->update(['status' => 'paid']);
-            $obligation = $obligation->fresh(['account', 'payments']);
-        }
+            FinanceObligationPayment::create([
+                'finance_obligation_id' => $obligation->id,
+                'expense_id' => $expense->id,
+                'paid_date' => $paidDate,
+                'amount' => $amount,
+                'note' => $data['note'] ?? null,
+            ]);
+
+            $fresh = $obligation->fresh(['account', 'payments']);
+            if ($this->obligationRemaining($fresh) <= 0) {
+                $fresh->update(['status' => 'paid']);
+                $fresh = $fresh->fresh(['account', 'payments']);
+            }
+
+            return $fresh;
+        });
 
         return $this->obligationPayload($obligation);
+    }
+
+    public function destroyFinanceObligationPayment(Request $request, FinanceObligationPayment $payment)
+    {
+        $payment->loadMissing(['obligation', 'expense']);
+        abort_unless($payment->obligation?->user_id === $request->user()->id, 404);
+
+        $obligation = DB::transaction(function () use ($payment) {
+            $obligation = $payment->obligation;
+            $expense = $payment->expense;
+
+            $payment->delete();
+            $expense?->delete();
+            $obligation->update(['status' => 'active']);
+
+            return $obligation;
+        });
+
+        return $this->obligationPayload($obligation->fresh(['account', 'payments.expense.account']));
+    }
+
+    public function supportTickets(Request $request)
+    {
+        return SupportTicket::query()
+            ->where('user_id', $request->user()->id)
+            ->latest()
+            ->get()
+            ->map(fn (SupportTicket $ticket) => $this->supportTicketPayload($ticket))
+            ->values();
+    }
+
+    public function storeSupportTicket(Request $request)
+    {
+        $data = $request->validate([
+            'subject' => ['required', 'string', 'max:160'],
+            'body' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $ticket = SupportTicket::create([
+            ...$data,
+            'user_id' => $request->user()->id,
+            'status' => 'open',
+        ]);
+
+        return $this->supportTicketPayload($ticket);
+    }
+
+    public function destroySupportTicket(Request $request, SupportTicket $ticket)
+    {
+        abort_unless($ticket->user_id === $request->user()->id, 404);
+
+        $ticket->delete();
+
+        return response()->noContent();
+    }
+
+    public function adminSupportTickets()
+    {
+        return SupportTicket::query()
+            ->with('user')
+            ->latest()
+            ->get()
+            ->map(fn (SupportTicket $ticket) => $this->supportTicketPayload($ticket, true))
+            ->values();
+    }
+
+    public function replySupportTicket(Request $request, SupportTicket $ticket)
+    {
+        $data = $request->validate([
+            'admin_reply' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $ticket->update([
+            'admin_reply' => $data['admin_reply'],
+            'status' => 'answered',
+            'replied_at' => now(),
+        ]);
+
+        return $this->supportTicketPayload($ticket->fresh('user'), true);
     }
 
     public function categories(Request $request)
@@ -608,6 +697,76 @@ class PlannerController extends Controller
         }
 
         return $this->taskPayload($task->load(['subtasks', 'timeSessions']));
+    }
+
+    public function updateTask(Request $request, Task $task)
+    {
+        $this->authorizeTask($request, $task);
+        abort_if($task->parent_id, 422, 'زیروظیفه از فرم وظیفه اصلی ویرایش می‌شود.');
+
+        $priorityKeys = $this->priorityKeys($request->user()->id);
+
+        $data = $request->validate([
+            'category_id' => ['required', 'integer'],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'planned_start_time' => ['nullable', 'date_format:H:i'],
+            'planned_end_time' => ['nullable', 'date_format:H:i'],
+            'estimated_minutes' => ['nullable', 'integer', 'min:1'],
+            'priority' => ['required', Rule::in($priorityKeys)],
+            'subtasks' => ['nullable', 'array'],
+            'subtasks.*.id' => ['nullable', 'integer'],
+            'subtasks.*.title' => ['required_with:subtasks', 'string', 'max:255'],
+            'subtasks.*.planned_start_time' => ['nullable', 'date_format:H:i'],
+            'subtasks.*.planned_end_time' => ['nullable', 'date_format:H:i'],
+            'subtasks.*.priority' => ['required_with:subtasks', Rule::in($priorityKeys)],
+        ]);
+
+        $category = Category::where('user_id', $request->user()->id)->findOrFail($data['category_id']);
+        $task->update([
+            'category_id' => $category->id,
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'planned_start_time' => $data['planned_start_time'] ?? null,
+            'planned_end_time' => $data['planned_end_time'] ?? null,
+            'estimated_minutes' => $data['estimated_minutes'] ?? null,
+            'priority' => $data['priority'],
+        ]);
+
+        $keptIds = [];
+        foreach ($data['subtasks'] ?? [] as $index => $subtaskData) {
+            $subtaskId = $subtaskData['id'] ?? null;
+            $payload = [
+                'user_id' => $request->user()->id,
+                'category_id' => $category->id,
+                'parent_id' => $task->id,
+                'task_date' => $task->task_date,
+                'title' => trim($subtaskData['title']),
+                'planned_start_time' => $subtaskData['planned_start_time'] ?? null,
+                'planned_end_time' => $subtaskData['planned_end_time'] ?? null,
+                'priority' => $subtaskData['priority'],
+                'sort_order' => $index + 1,
+            ];
+
+            if ($subtaskId) {
+                $subtask = Task::where('user_id', $request->user()->id)
+                    ->where('parent_id', $task->id)
+                    ->findOrFail($subtaskId);
+                $subtask->update($payload);
+                $keptIds[] = $subtask->id;
+                continue;
+            }
+
+            $created = Task::create($payload);
+            $keptIds[] = $created->id;
+        }
+
+        Task::where('user_id', $request->user()->id)
+            ->where('parent_id', $task->id)
+            ->when($keptIds, fn ($query) => $query->whereNotIn('id', $keptIds))
+            ->delete();
+
+        return $this->taskPayload($task->fresh()->load(['subtasks', 'timeSessions']));
     }
 
     public function complete(Request $request, Task $task)
@@ -1226,6 +1385,16 @@ class PlannerController extends Controller
             'actual_seconds' => $actual,
             'completed_at' => $task->completed_at,
             'metadata' => $task->metadata,
+            'time_sessions' => $task->timeSessions
+                ->where('status', 'stopped')
+                ->sortBy('started_at')
+                ->map(fn (TaskTimeSession $session) => [
+                    'id' => $session->id,
+                    'started_at' => $session->started_at,
+                    'ended_at' => $session->ended_at,
+                    'duration_seconds' => (int) $session->duration_seconds,
+                ])
+                ->values(),
             'subtasks' => $task->subtasks->map(fn (Task $subtask) => $this->taskPayload($subtask))->values(),
         ];
     }
@@ -1398,7 +1567,7 @@ class PlannerController extends Controller
 
     private function obligationPayload(FinanceObligation $obligation): array
     {
-        $obligation->loadMissing(['account', 'payments']);
+        $obligation->loadMissing(['account', 'payments.expense.account']);
         $paid = (int) $obligation->payments->sum('amount');
         $remaining = max(0, (int) $obligation->total_amount - $paid);
         $installmentAmount = (int) ($obligation->installment_amount ?: $obligation->total_amount);
@@ -1423,6 +1592,16 @@ class PlannerController extends Controller
             'progress' => $obligation->total_amount > 0 ? min(100, round(($paid / $obligation->total_amount) * 100)) : 0,
             'current_due' => $this->obligationCurrentDue($obligation),
             'account' => $obligation->account ? $this->accountPayload($obligation->account) : null,
+            'payments' => $obligation->payments
+                ->sortByDesc('paid_date')
+                ->map(fn (FinanceObligationPayment $payment) => [
+                    'id' => $payment->id,
+                    'amount' => (int) $payment->amount,
+                    'paid_date' => $this->dateKey($payment->paid_date),
+                    'note' => $payment->note,
+                    'account' => $payment->expense?->account ? $this->accountPayload($payment->expense->account) : null,
+                ])
+                ->values(),
         ];
     }
 
@@ -1441,6 +1620,25 @@ class PlannerController extends Controller
         }
 
         return $remaining;
+    }
+
+    private function supportTicketPayload(SupportTicket $ticket, bool $includeUser = false): array
+    {
+        return [
+            'id' => $ticket->id,
+            'subject' => $ticket->subject,
+            'body' => $ticket->body,
+            'status' => $ticket->status,
+            'admin_reply' => $ticket->admin_reply,
+            'created_at' => $ticket->created_at,
+            'replied_at' => $ticket->replied_at,
+            'user' => $includeUser && $ticket->user ? [
+                'id' => $ticket->user->id,
+                'name' => $ticket->user->name,
+                'email' => $ticket->user->email,
+                'phone' => $ticket->user->phone,
+            ] : null,
+        ];
     }
 
     private function cleanNullableNumber(?string $value): ?string

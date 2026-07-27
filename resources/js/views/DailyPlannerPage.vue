@@ -4,13 +4,13 @@ import { useRoute, useRouter } from 'vue-router';
 import { isValidJalaaliDate, jalaaliMonthLength, toGregorian, toJalaali } from 'jalaali-js';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
-import { useAuthStore } from '../stores/auth';
 
 type Category = { id: number; name: string; color: string; soft_color: string; icon: string };
 type PrioritySetting = { id: number; key: string; label: string; color: string; soft_color: string; is_default?: boolean };
 type ExpenseCategory = { id: number; name: string; color: string; soft_color: string; type: 'expense' | 'income'; is_default?: boolean };
 type FinancialAccount = { id: number; name: string; color: string; initial_balance: number; income_total: number; expense_total: number; current_balance: number; is_default?: boolean; is_active: boolean };
 type Expense = { id: number; expense_category_id: number; financial_account_id: number | null; title: string; amount: number; type: 'expense' | 'income'; expense_date: string; note: string | null; category: ExpenseCategory | null; account: { id: number; name: string; color: string } | null };
+type TimeSession = { id: number; started_at: string | null; ended_at: string | null; duration_seconds: number };
 type MealEntry = { id: number; title: string; meal_date: string; meal_time: string | null; meal_type: string; note: string | null; status: string; sort_order?: number };
 type RoutineItem = { id: number; title: string; color: string; is_default: boolean; done: boolean };
 type Routine = { wake_time: string | null; sleep_time: string | null; items: RoutineItem[] };
@@ -20,6 +20,7 @@ type Task = {
     parent_id: number | null;
     task_date: string | null;
     title: string;
+    description: string | null;
     planned_start_time: string | null;
     planned_end_time: string | null;
     estimated_minutes: number | null;
@@ -27,13 +28,25 @@ type Task = {
     status: string;
     actual_seconds: number;
     metadata?: Record<string, unknown> | null;
+    time_sessions: TimeSession[];
     subtasks: Task[];
 };
 type FollowUp = { id: number; title: string; person_name: string | null; follow_up_time: string | null; status: string };
-type SubtaskDraft = { title: string; planned_start_time: string; planned_end_time: string; priority: string };
+type SubtaskDraft = { id?: number; title: string; planned_start_time: string; planned_end_time: string; priority: string };
 type DueNotification = { id: string; kind: 'task' | 'subtask' | 'follow' | 'meal'; title: string; time: string; meta: string; targetId: string; color: string; softColor: string; category_id?: number };
+type ActiveTimer = {
+    task_id: number;
+    task_title: string;
+    task_date?: string | null;
+    category_id?: number | null;
+    category_name?: string | null;
+    category_color?: string | null;
+    duration_seconds: number;
+    status: string;
+    started_at?: string;
+    local_started_at?: number;
+};
 
-const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const loading = ref(true);
@@ -53,6 +66,8 @@ const financialAccounts = ref<FinancialAccount[]>([]);
 const expenses = ref<Expense[]>([]);
 const newExpense = ref({ title: '', amount: '', expense_category_id: '', financial_account_id: '', note: '', type: 'expense' as 'expense' | 'income' });
 const expenseModal = ref(false);
+const financeNotice = ref('');
+let financeNoticeTimer: number | undefined;
 const meals = ref<MealEntry[]>([]);
 const routine = ref<Routine>({ wake_time: null, sleep_time: null, items: [] });
 const routineDraft = ref({ wake_time: '', sleep_time: '' });
@@ -61,13 +76,15 @@ const newRoutineTitle = ref('');
 const newMeal = ref({ title: '', meal_time: '', meal_type: 'meal', note: '' });
 const newNutritionTask = ref({ title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' });
 const mealDrafts = ref<Record<number, { title: string; meal_time: string; meal_type: string; note: string }>>({});
-const activeTimer = ref<{ task_id: number; task_title: string; duration_seconds: number; status: string; started_at?: string; local_started_at?: number } | null>(null);
+const activeTimer = ref<ActiveTimer | null>(null);
 const nowTick = ref(Date.now());
 let timerInterval: number | undefined;
 const collapsed = ref<Record<number, boolean>>({});
 const taskModal = ref(false);
+const editingTask = ref<Task | null>(null);
 const descriptionModalTask = ref<Task | null>(null);
 const referModal = ref(false);
+const timeLogTask = ref<Task | null>(null);
 const referTaskTarget = ref<Task | null>(null);
 const referDateInput = ref('');
 const referDateError = ref('');
@@ -97,6 +114,7 @@ const noteSaved = ref(false);
 const drawerRef = ref<HTMLElement | null>(null);
 const reviewSubmitted = ref(false);
 const viewMode = ref<'notebook' | 'table' | 'trello'>('notebook');
+const viewMenuOpen = ref(false);
 const tableStatusFilter = ref<'all' | 'pending' | 'done'>('all');
 const seenDueIds = ref<Set<string>>(new Set());
 
@@ -109,6 +127,24 @@ const fallbackPriorities: PrioritySetting[] = [
 const mealTypeLabels: Record<string, string> = { breakfast: 'صبحانه', lunch: 'ناهار', dinner: 'شام', snack: 'میان‌وعده', water: 'آب', meal: 'وعده' };
 const mealTypeIcon: Record<string, string> = { breakfast: '☀', lunch: '◐', dinner: '☾', snack: '◆', water: '≈', meal: '●' };
 const iconMap: Record<string, string> = { briefcase: 'M10 6h4M5 9h14v10H5zM8 9V7a2 2 0 012-2h4a2 2 0 012 2v2', activity: 'M22 12h-4l-3 8-6-16-3 8H2', leaf: 'M5 21c8 0 14-6 14-14V4h-3C8 4 4 8 4 16c0 2 1 4 1 5z', book: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5z', home: 'M3 11l9-8 9 8v10H3z', target: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 18a6 6 0 100-12 6 6 0 000 12zM12 14a2 2 0 100-4 2 2 0 000 4z', calendar: 'M7 3v4M17 3v4M4 9h16M5 5h14v16H5z', clock: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2', star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.9 6.4 21.2 7.5 15 3 10.6l6.2-.9z', heart: 'M20.8 5.6a5.5 5.5 0 00-7.8 0L12 6.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 22l7.8-7.6 1-1a5.5 5.5 0 000-7.8z', wallet: 'M3 7h15a3 3 0 013 3v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM16 12h3', cart: 'M4 6h2l2 11h11l2-8H7M9 21a1 1 0 100-2 1 1 0 000 2zM18 21a1 1 0 100-2 1 1 0 000 2z', code: 'M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14', pen: 'M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16zM13 7l4 4', phone: 'M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7l.5 2.6a2 2 0 01-.6 1.9L7.8 9.4a16 16 0 006.8 6.8l1.2-1.2a2 2 0 011.9-.6l2.6.5a2 2 0 011.7 2z', users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8', music: 'M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z', camera: 'M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z', plane: 'M22 2L11 13M22 2l-7 20-4-9-9-4z', gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 110-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 100-5C13 2 12 7 12 7z', shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', coffee: 'M17 8h1a4 4 0 010 8h-1M3 8h14v5a6 6 0 01-6 6H9a6 6 0 01-6-6zM6 2v3M10 2v3M14 2v3', sparkles: 'M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8zM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8z', map: 'M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3zM9 3v15M15 6v15', folder: 'M3 5h7l2 3h9v11H3z', zap: 'M13 2L3 14h8l-1 8 10-12h-8z', sun: 'M12 18a6 6 0 100-12 6 6 0 000 12zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', moon: 'M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z', check: 'M20 6L9 17l-5-5', flag: 'M4 22V4h12l-1 4 1 4H4' };
+const viewOptions = [
+    { value: 'notebook', label: 'دفترچه‌ای', icon: 'book', hint: 'نمای رنگی روزانه' },
+    { value: 'trello', label: 'ترلو', icon: 'folder', hint: 'کارت‌ها کنار هم' },
+    { value: 'table', label: 'جدولی ساده', icon: 'calendar', hint: 'مرتب و فشرده' },
+] as const;
+const currentViewOption = computed(() => viewOptions.find((option) => option.value === viewMode.value) || viewOptions[0]);
+
+function chooseViewMode(mode: 'notebook' | 'table' | 'trello') {
+    viewMode.value = mode;
+    viewMenuOpen.value = false;
+}
+
+function closeViewMenuOnOutsideClick(event: MouseEvent) {
+    if (!viewMenuOpen.value) return;
+    const target = event.target as Node | null;
+    if (target && drawerRef.value?.contains(target)) return;
+    viewMenuOpen.value = false;
+}
 
 const summary = computed(() => {
     const total = tasks.value.length;
@@ -137,6 +173,25 @@ const expenseGroups = computed(() => expenseCategories.value.map((category) => {
         incomeTotal: incomes.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
     };
 }));
+const financeGroupCards = computed(() => [...expenseGroups.value].sort((a, b) => {
+    const aTotal = a.type === 'income' ? a.incomeTotal : a.total;
+    const bTotal = b.type === 'income' ? b.incomeTotal : b.total;
+    if (Boolean(bTotal) !== Boolean(aTotal)) return Number(Boolean(bTotal)) - Number(Boolean(aTotal));
+    if (bTotal !== aTotal) return bTotal - aTotal;
+    return a.name.localeCompare(b.name);
+}));
+const activeFinanceGroupCards = computed(() => financeGroupCards.value.filter((group) => (group.type === 'income' ? group.incomeTotal : group.total) > 0));
+const dailyAccountCards = computed(() => financialAccounts.value.map((account) => {
+    const accountExpenses = expenseItems.value.filter((expense) => expense.financial_account_id === account.id);
+    const accountIncomes = incomeItems.value.filter((expense) => expense.financial_account_id === account.id);
+
+    return {
+        ...account,
+        dailyExpense: accountExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+        dailyIncome: accountIncomes.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+        dailyCount: accountExpenses.length + accountIncomes.length,
+    };
+}).filter((account) => account.dailyCount > 0));
 const nutritionCategory = computed(() => categories.value.find((category) => category.icon === 'leaf') ?? categories.value.find((category) => category.name.includes('تغذیه')) ?? null);
 const nutritionTasks = computed(() => nutritionCategory.value ? categoryTasks(nutritionCategory.value.id) : []);
 const mealSummary = computed(() => {
@@ -172,6 +227,7 @@ const currentClock = computed(() => {
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 });
 const isViewingToday = computed(() => date.value === tehranDateString(new Date(nowTick.value)));
+const dayPlanTitle = computed(() => isViewingToday.value ? 'برنامه امروز' : 'برنامه روز');
 const dueNotifications = computed<DueNotification[]>(() => {
     if (!isViewingToday.value) return [];
     const due: DueNotification[] = [];
@@ -258,6 +314,39 @@ const jalaliMachineDate = computed(() => {
     return `${j.jy}/${String(j.jm).padStart(2, '0')}/${String(j.jd).padStart(2, '0')}`;
 });
 const activeTimerTask = computed(() => activeTimer.value ? tasks.value.find((task) => task.id === activeTimer.value?.task_id) : null);
+const activeTimerCategory = computed(() => {
+    if (!activeTimer.value) return null;
+    const fromTask = activeTimerTask.value ? categories.value.find((category) => category.id === activeTimerTask.value?.category_id) : null;
+    return {
+        name: fromTask?.name ?? activeTimer.value.category_name ?? 'بدون گروه',
+        color: fromTask?.color ?? activeTimer.value.category_color ?? '#3a2e1f',
+    };
+});
+const activeTimerTaskNumber = computed(() => {
+    const timer = activeTimer.value;
+    const task = activeTimerTask.value;
+    const categoryId = task?.category_id ?? timer?.category_id;
+    if (!timer || !categoryId) return '';
+
+    const index = tasks.value.filter((item) => item.category_id === categoryId).findIndex((item) => item.id === timer.task_id);
+    return index >= 0 ? fa(index + 1) : '';
+});
+const activeTimerSeconds = computed(() => {
+    const timer = activeTimer.value;
+    if (!timer) return 0;
+    if (timer.status === 'paused') return timer.duration_seconds;
+    return timer.duration_seconds + Math.max(0, Math.floor((nowTick.value - (timer.local_started_at ?? nowTick.value)) / 1000));
+});
+const activeTimerIsLong = computed(() => activeTimerSeconds.value >= 3 * 60 * 60);
+const activeTimerIsFromAnotherDay = computed(() => Boolean(activeTimer.value?.task_date && activeTimer.value.task_date !== date.value));
+const activeTimerDockVisible = computed(() => activeTimer.value?.status === 'running');
+const activeTimerWarning = computed(() => {
+    if (!activeTimer.value) return '';
+    if (activeTimerIsFromAnotherDay.value && activeTimerIsLong.value) return 'این تایمر از روز قبل فعال مانده و بیش از ۳ ساعت گذشته؛ لطفاً زمان پایان را بررسی کن.';
+    if (activeTimerIsLong.value) return 'این تایمر بیش از ۳ ساعت روشن مانده؛ هنوز ادامه دارد؟';
+    if (activeTimerIsFromAnotherDay.value) return 'این تایمر مربوط به روز دیگری است و هنوز بسته نشده.';
+    return '';
+});
 const jalaliMonthName = computed(() => ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'][calendarMonth.value - 1] ?? '');
 const calendarDays = computed(() => {
     if (!calendarYear.value || !calendarMonth.value) return [];
@@ -454,6 +543,19 @@ function clockLabel(seconds: number) {
     const s = Math.floor(seconds % 60);
     const pad = (value: number) => String(value).padStart(2, '0');
     return fa(`${pad(h)}:${pad(m)}:${pad(s)}`);
+}
+
+function timeSessionTotal(task: Task | null) {
+    return task?.time_sessions?.reduce((sum, session) => sum + Number(session.duration_seconds || 0), 0) ?? 0;
+}
+
+function sessionClock(value: string | null) {
+    if (!value) return 'ثبت نشده';
+    return fa(new Intl.DateTimeFormat('fa-IR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Tehran',
+    }).format(new Date(value)));
 }
 
 function moneyLabel(amount: number) {
@@ -771,12 +873,49 @@ function closeReferCalendarOnOutsideClick(event: MouseEvent) {
 }
 
 function openTaskModal(categoryId: number) {
+    editingTask.value = null;
     selectedCategory.value = categoryId;
+    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '' };
     modalSubtasks.value = [];
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     modalSubtasksOpen.value = false;
     categoryPickerModal.value = false;
     taskModal.value = true;
+}
+
+function openEditTaskModal(task: Task) {
+    editingTask.value = task;
+    selectedCategory.value = task.category_id;
+    newTask.value = {
+        title: task.title,
+        planned_start_time: task.planned_start_time || '',
+        planned_end_time: task.planned_end_time || '',
+        estimated_minutes: task.estimated_minutes ? String(task.estimated_minutes) : '',
+        priority: task.priority || 'medium',
+        description: task.description || '',
+        subtasks: '',
+    };
+    modalSubtasks.value = task.subtasks.map((subtask) => ({
+        id: subtask.id,
+        title: subtask.title,
+        planned_start_time: subtask.planned_start_time || '',
+        planned_end_time: subtask.planned_end_time || '',
+        priority: subtask.priority || 'medium',
+    }));
+    modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
+    modalSubtasksOpen.value = Boolean(modalSubtasks.value.length);
+    categoryPickerModal.value = false;
+    taskModal.value = true;
+}
+
+function closeTaskModal() {
+    taskModal.value = false;
+    editingTask.value = null;
+    selectedCategory.value = null;
+    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '' };
+    modalSubtasks.value = [];
+    modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
+    modalSubtasksOpen.value = false;
 }
 
 function openDescriptionModal(task: Task) {
@@ -871,13 +1010,45 @@ async function createTask() {
         planned_end_time: newTask.value.planned_end_time || null,
         subtasks: modalSubtasks.value,
     });
-    taskModal.value = false;
-    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '' };
-    modalSubtasks.value = [];
-    modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
-    modalSubtasksOpen.value = false;
+    closeTaskModal();
     tasks.value.push(data);
     inlineSubtasks.value[data.id] = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
+}
+
+async function updateTask() {
+    const task = editingTask.value;
+    if (!task || !newTask.value.title || !selectedCategory.value) return;
+
+    const { data } = await api.put(`/tasks/${task.id}`, {
+        ...newTask.value,
+        category_id: selectedCategory.value,
+        estimated_minutes: newTask.value.estimated_minutes || null,
+        planned_start_time: newTask.value.planned_start_time || null,
+        planned_end_time: newTask.value.planned_end_time || null,
+        subtasks: modalSubtasks.value,
+    });
+
+    tasks.value = tasks.value.map((item) => item.id === task.id ? data : item);
+    if (activeTimer.value?.task_id === task.id) {
+        const category = categories.value.find((item) => item.id === data.category_id);
+        activeTimer.value = {
+            ...activeTimer.value,
+            task_title: data.title,
+            category_id: data.category_id,
+            category_name: category?.name ?? activeTimer.value.category_name,
+            category_color: category?.color ?? activeTimer.value.category_color,
+        };
+    }
+    closeTaskModal();
+}
+
+function submitTaskModal() {
+    if (editingTask.value) {
+        void updateTask();
+        return;
+    }
+
+    void createTask();
 }
 
 async function referTask() {
@@ -1034,6 +1205,10 @@ async function timer(task: Task, action: string, completeOnStop = false) {
         activeTimer.value = {
             task_id: task.id,
             task_title: task.title,
+            task_date: task.task_date,
+            category_id: task.category_id,
+            category_name: categories.value.find((category) => category.id === task.category_id)?.name,
+            category_color: categories.value.find((category) => category.id === task.category_id)?.color,
             duration_seconds: 0,
             status: 'running',
             local_started_at: Date.now(),
@@ -1066,6 +1241,34 @@ async function timer(task: Task, action: string, completeOnStop = false) {
         tasks.value = tasks.value.map((item) => item.id === task.id ? data.task : item);
     } else {
         await loadPlanner();
+    }
+}
+
+async function stopActiveTimer() {
+    const timer = activeTimer.value;
+    if (!timer) return;
+
+    activeTimer.value = null;
+    const { data } = await api.post(`/tasks/${timer.task_id}/timer/stop`, { complete: false });
+    if (data.task) {
+        tasks.value = tasks.value.map((item) => item.id === timer.task_id ? data.task : item);
+    }
+    await loadPlanner();
+}
+
+async function focusActiveTimerTask() {
+    const timer = activeTimer.value;
+    if (!timer) return;
+    if (timer.task_date && timer.task_date !== date.value) {
+        await setPlannerDate(timer.task_date, true);
+        await nextTick();
+    }
+
+    const target = document.getElementById(`task-${timer.task_id}`);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('due-focus');
+        window.setTimeout(() => target.classList.remove('due-focus'), 1800);
     }
 }
 
@@ -1116,9 +1319,19 @@ async function createExpense() {
 
 async function deleteExpense(expense: Expense) {
     if (!window.confirm('این هزینه حذف شود؟')) return;
+    const scrollY = window.scrollY;
+
     await api.delete(`/expenses/${expense.id}`);
     expenses.value = expenses.value.filter((item) => item.id !== expense.id);
     await loadPlanner();
+    await nextTick();
+    requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' }));
+
+    financeNotice.value = 'حذف شد';
+    if (financeNoticeTimer) window.clearTimeout(financeNoticeTimer);
+    financeNoticeTimer = window.setTimeout(() => {
+        financeNotice.value = '';
+    }, 2200);
 }
 
 async function createMeal() {
@@ -1229,11 +1442,6 @@ async function submitReview() {
     reviewSubmitted.value = true;
 }
 
-async function logout() {
-    await auth.logout();
-    window.location.href = '/login';
-}
-
 watch(() => newExpense.value.type, () => {
     syncFinanceCategorySelection();
 });
@@ -1257,6 +1465,7 @@ onMounted(() => {
     document.addEventListener('input', normalizeLiveInput, true);
     document.addEventListener('click', closeCalendarOnOutsideClick, true);
     document.addEventListener('click', closeReferCalendarOnOutsideClick, true);
+    document.addEventListener('click', closeViewMenuOnOutsideClick, true);
     void syncDateQuery(date.value);
     loadPlanner();
     timerInterval = window.setInterval(() => {
@@ -1268,31 +1477,57 @@ onUnmounted(() => {
     document.removeEventListener('input', normalizeLiveInput, true);
     document.removeEventListener('click', closeCalendarOnOutsideClick, true);
     document.removeEventListener('click', closeReferCalendarOnOutsideClick, true);
+    document.removeEventListener('click', closeViewMenuOnOutsideClick, true);
     if (timerInterval) window.clearInterval(timerInterval);
+    if (financeNoticeTimer) window.clearTimeout(financeNoticeTimer);
 });
 </script>
 
 <template>
-    <div class="notebook-shell" dir="rtl">
+    <div class="notebook-shell" :class="{ 'has-active-timer': activeTimerDockVisible }" dir="rtl">
+        <div v-if="financeNotice" class="finance-toast" role="status">{{ financeNotice }}</div>
         <div class="notebook-page">
             <i class="tape tape-yellow"></i>
             <i class="tape tape-cyan"></i>
             <i class="tape tape-pink"></i>
 
             <header class="notebook-header">
+                <div class="mobile-top-clock">
+                    {{ fa(currentClock) }}
+                </div>
                 <div class="notebook-brand">
-                    <div class="notebook-logo">ر</div>
-                    <strong>دفتر برنامه‌ریزی من</strong>
+                    <div class="notebook-logo brand-icon-mark">
+                        <img :src="'/brand/bejelo-mark.png'" alt="" />
+                        <span>ر</span>
+                    </div>
+                    <strong>دفتر یادداشت</strong>
                 </div>
                 <div ref="drawerRef" class="top-tools">
-                    <label class="view-switch">
+                    <div class="view-switch" :class="{ open: viewMenuOpen }">
                         <span>نمایش</span>
-                        <select v-model="viewMode">
-                            <option value="notebook">دفترچه‌ای</option>
-                            <option value="trello">ترلو</option>
-                            <option value="table">جدولی ساده</option>
-                        </select>
-                    </label>
+                        <button class="view-switch-trigger" type="button" :aria-expanded="viewMenuOpen" @click="viewMenuOpen = !viewMenuOpen">
+                            <i>
+                                <svg viewBox="0 0 24 24"><path :d="iconMap[currentViewOption.icon]" /></svg>
+                            </i>
+                            <b>{{ currentViewOption.label }}</b>
+                            <em></em>
+                        </button>
+                        <div v-if="viewMenuOpen" class="view-switch-menu">
+                            <button
+                                v-for="option in viewOptions"
+                                :key="option.value"
+                                type="button"
+                                :class="{ active: viewMode === option.value }"
+                                @click="chooseViewMode(option.value)"
+                            >
+                                <i>
+                                    <svg viewBox="0 0 24 24"><path :d="iconMap[option.icon]" /></svg>
+                                </i>
+                                <strong>{{ option.label }}</strong>
+                                <small>{{ option.hint }}</small>
+                            </button>
+                        </div>
+                    </div>
                     <AppMenu />
                 </div>
             </header>
@@ -1328,7 +1563,7 @@ onUnmounted(() => {
                 </section>
 
                 <section class="day-card">
-                    <div><h1>برنامه امروز</h1><p>{{ persianDate }}</p></div>
+                    <div><h1>{{ dayPlanTitle }}</h1><p>{{ persianDate }}</p></div>
                     <div ref="calendarRef" class="date-actions">
                         <button title="روز قبل" @click="shiftDate(-1)">‹</button>
                         <button @click="goToday">امروز</button>
@@ -1630,7 +1865,7 @@ onUnmounted(() => {
                                 @dragend="draggedTaskId = null"
                             >
                                 <div class="task-time-chip" :class="{ live: isTaskTimerRunning(task), paused: isTaskTimerPaused(task) }">
-                                    <span><b>کارکرد</b><strong>{{ timeLabel(taskTotalSeconds(task)) }}</strong></span>
+                                    <button type="button" class="time-chip-action" @click="timeLogTask = task"><b>کارکرد</b><strong>{{ timeLabel(taskTotalSeconds(task)) }}</strong></button>
                                     <span><b>برنامه</b><em>{{ taskPlannedLabel(task) }}</em></span>
                                 </div>
                                 <span class="task-number" :style="{ background: category.color }">{{ fa(index + 1) }}</span>
@@ -1639,6 +1874,7 @@ onUnmounted(() => {
                                         <button class="check-btn title-check" :class="{ checked: task.status === 'done' }" @click="toggleTask(task)">✓</button>
                                         <strong>{{ task.title }}</strong>
                                         <span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span>
+                                        <button class="edit-icon" title="ویرایش وظیفه" aria-label="ویرایش وظیفه" @click.stop="openEditTaskModal(task)"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg></button>
                                         <mark v-if="task.status === 'done'" class="done-badge">انجام شد</mark>
                                         <mark v-if="isReferred(task)" class="refer-text-badge" title="ارجاع داده شده">ارجاع شد</mark>
                                         <button v-else class="refer-icon" title="ارجاع به روز دیگر" aria-label="ارجاع به روز دیگر" @click="openReferModal(task)"><svg viewBox="0 0 24 24"><path d="M7 17L17 7"></path><path d="M10 7h7v7"></path></svg></button>
@@ -1698,11 +1934,11 @@ onUnmounted(() => {
                                         <button v-if="isTaskTimerRunning(task)" class="action-icon pause-icon" title="توقف موقت" aria-label="توقف موقت" @click="timer(task, 'pause')">
                                             <svg viewBox="0 0 24 24"><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>
                                         </button>
-                                        <button class="action-icon delete-mini" title="حذف" aria-label="حذف" @click="deleteTask(task)">
-                                            <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>
-                                        </button>
                                     </div>
                                 </div>
+                                <button class="action-icon delete-mini task-delete-edge" title="حذف" aria-label="حذف" @click="deleteTask(task)">
+                                    <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>
+                                </button>
                             </article>
                         </div>
                     </section>
@@ -1834,16 +2070,24 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <div class="finance-account-strip">
-                            <div v-for="account in financialAccounts" :key="account.id" :style="{ '--c': account.color }">
+                        <div v-if="dailyAccountCards.length" class="finance-section-label">
+                            <span>حساب‌های فعال امروز</span>
+                            <small>{{ fa(dailyAccountCards.length) }} حساب</small>
+                        </div>
+                        <div v-if="dailyAccountCards.length" class="finance-account-strip">
+                            <div v-for="account in dailyAccountCards" :key="account.id" :style="{ '--c': account.color }">
                                 <span>{{ account.name }}</span>
                                 <strong>{{ moneyLabel(account.current_balance) }}</strong>
-                                <small>{{ moneyLabel(account.expense_total) }} برداشت</small>
+                                <small>واریز {{ moneyLabel(account.dailyIncome) }} · برداشت {{ moneyLabel(account.dailyExpense) }}</small>
                             </div>
                         </div>
 
-                        <div class="expense-groups">
-                            <div v-for="group in expenseGroups" :key="group.id" :class="group.type" :style="{ '--c': group.color, '--soft': group.soft_color }">
+                        <div v-if="activeFinanceGroupCards.length" class="finance-section-label">
+                            <span>دسته‌بندی امروز</span>
+                            <small>{{ fa(activeFinanceGroupCards.length) }} دسته فعال</small>
+                        </div>
+                        <div v-if="activeFinanceGroupCards.length" class="expense-groups">
+                            <div v-for="group in activeFinanceGroupCards" :key="group.id" :class="group.type" :style="{ '--c': group.color, '--soft': group.soft_color }">
                                 <i></i>
                                 <span>{{ group.name }}</span>
                                 <strong>{{ moneyLabel(group.type === 'income' ? group.incomeTotal : group.total) }}</strong>
@@ -1851,6 +2095,10 @@ onUnmounted(() => {
                             </div>
                         </div>
 
+                        <div v-if="expenses.length" class="finance-section-label">
+                            <span>آخرین تراکنش‌ها</span>
+                            <small>{{ fa(expenses.length) }} مورد</small>
+                        </div>
                         <div v-if="expenses.length" class="expense-list">
                             <article v-for="expense in expenses" :key="expense.id" :style="{ '--c': expense.category?.color || '#14B8A6', '--soft': expense.category?.soft_color || '#DDFCF7' }">
                                 <div>
@@ -2080,17 +2328,21 @@ onUnmounted(() => {
         </div>
 
         <div v-if="taskModal" class="modal-backdrop">
-            <form class="modal-card task-modal-card" @submit.prevent="createTask">
-                <h2>افزودن وظیفه جدید</h2>
+            <form class="modal-card task-modal-card" @submit.prevent="submitTaskModal">
+                <h2>{{ editingTask ? 'ویرایش وظیفه' : 'افزودن وظیفه جدید' }}</h2>
                 <input v-model="newTask.title" placeholder="عنوان وظیفه" required />
+                <select v-model="selectedCategory" required>
+                    <option v-for="category in categories" :key="`task-modal-category-${category.id}`" :value="category.id">{{ category.name }}</option>
+                </select>
                 <textarea v-model="newTask.description" placeholder="توضیح کوتاه..." />
                 <div class="two-cols"><input v-model="newTask.planned_start_time" type="time" /><input v-model="newTask.planned_end_time" type="time" /></div>
                 <div class="two-cols"><input v-model="newTask.estimated_minutes" type="number" placeholder="مدت تخمینی" /><select v-model="newTask.priority"><option v-for="priority in priorities" :key="`task-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option></select></div>
                 <div class="modal-subtasks" :class="{ 'mobile-open': modalSubtasksOpen || modalSubtasks.length }">
                     <div class="modal-subtasks-head">
                         <label>زیروظیفه‌ها</label>
-                        <button type="button" @click="modalSubtasksOpen = !modalSubtasksOpen">
-                            {{ modalSubtasksOpen || modalSubtasks.length ? 'بستن' : 'افزودن زیروظیفه' }}
+                        <button type="button" class="modal-subtask-toggle" @click="modalSubtasksOpen = !modalSubtasksOpen">
+                            <i>{{ modalSubtasksOpen || modalSubtasks.length ? '×' : '+' }}</i>
+                            <span>{{ modalSubtasksOpen || modalSubtasks.length ? 'بستن' : 'زیر وظیفه' }}</span>
                         </button>
                     </div>
                     <div
@@ -2112,7 +2364,7 @@ onUnmounted(() => {
                         </div>
                         <button type="button" class="modal-subtask-remove" @click="removeModalSubtask(index)">×</button>
                     </div>
-                    <div class="modal-subtask-add">
+                    <div v-if="modalSubtasksOpen || modalSubtasks.length" class="modal-subtask-add">
                         <input v-model="modalSubtaskDraft.title" class="subtask-title-input" placeholder="عنوان زیروظیفه" @keydown.enter.prevent="addModalSubtask" />
                         <div class="subtask-meta-row">
                             <label>
@@ -2133,7 +2385,7 @@ onUnmounted(() => {
                         </div>
                     </div>
                 </div>
-                <div class="modal-actions"><button type="button" @click="taskModal = false">انصراف</button><button type="submit">افزودن وظیفه</button></div>
+                <div class="modal-actions"><button type="button" @click="closeTaskModal">انصراف</button><button type="submit">{{ editingTask ? 'ذخیره تغییرات' : 'افزودن وظیفه' }}</button></div>
             </form>
         </div>
 
@@ -2143,6 +2395,32 @@ onUnmounted(() => {
                 <div class="description-icon">i</div>
                 <h2>{{ descriptionModalTask.title }}</h2>
                 <p>{{ descriptionModalTask.description }}</p>
+            </section>
+        </div>
+
+        <div v-if="timeLogTask" class="modal-backdrop">
+            <section class="modal-card time-log-modal">
+                <header>
+                    <div>
+                        <span>گزارش کارکرد</span>
+                        <h2>{{ timeLogTask.title }}</h2>
+                    </div>
+                    <button type="button" aria-label="بستن" @click="timeLogTask = null">×</button>
+                </header>
+
+                <div v-if="timeLogTask.time_sessions?.length" class="time-log-table">
+                    <div class="time-log-row head"><span>شروع</span><span>پایان</span><span>جمع</span></div>
+                    <div v-for="session in timeLogTask.time_sessions" :key="session.id" class="time-log-row">
+                        <span>{{ sessionClock(session.started_at) }}</span>
+                        <span>{{ sessionClock(session.ended_at) }}</span>
+                        <strong>{{ timeLabel(session.duration_seconds) }}</strong>
+                    </div>
+                    <div class="time-log-total">
+                        <span>جمع کل</span>
+                        <strong>{{ timeLabel(timeSessionTotal(timeLogTask)) }}</strong>
+                    </div>
+                </div>
+                <div v-else class="time-log-empty">هنوز کارکرد ثبت‌شده‌ای برای این تسک نیست.</div>
             </section>
         </div>
 
@@ -2228,5 +2506,30 @@ onUnmounted(() => {
                 </div>
             </form>
         </div>
+
+        <aside
+            v-if="activeTimerDockVisible && activeTimer"
+            class="active-timer-dock"
+            :class="{ warning: activeTimerWarning }"
+            :style="{ '--timer-color': activeTimerCategory?.color || '#16a34a' }"
+        >
+            <div class="timer-dock-main">
+                <i>{{ activeTimerTaskNumber }}</i>
+                <div>
+                    <strong>{{ activeTimer.task_title }}</strong>
+                    <small>{{ activeTimerCategory?.name || 'بدون گروه' }}</small>
+                </div>
+                <b>{{ clockLabel(activeTimerSeconds) }}</b>
+            </div>
+            <p v-if="activeTimerWarning">{{ activeTimerIsFromAnotherDay ? 'از روز قبل' : '+۳ ساعت' }}</p>
+            <div class="timer-dock-actions">
+                <button type="button" :title="activeTimerIsFromAnotherDay ? 'رفتن به روز تسک' : 'دیدن تسک'" @click="focusActiveTimerTask">
+                    <svg viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"></path></svg>
+                </button>
+                <button type="button" class="stop" title="توقف و ثبت" @click="stopActiveTimer">
+                    <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"></rect></svg>
+                </button>
+            </div>
+        </aside>
     </div>
 </template>
