@@ -26,30 +26,24 @@ button.request-loading {
     position: relative;
     pointer-events: none;
     cursor: wait !important;
-    opacity: .82;
+    color: transparent !important;
+    text-shadow: none !important;
 }
 
 button.request-loading::after {
     content: '';
     position: absolute;
     top: 50%;
-    left: 10px;
-    width: 14px;
-    height: 14px;
-    margin-top: -7px;
-    border: 2px solid currentColor;
+    left: 50%;
+    width: 18px;
+    height: 18px;
+    margin-top: -9px;
+    margin-left: -9px;
+    border: 3px solid rgba(58, 46, 31, .26);
     border-top-color: transparent;
     border-radius: 50%;
-    animation: request-spin .65s linear infinite;
-}
-
-button.request-loading.icon-only::after,
-button.request-loading.action-icon::after,
-button.request-loading.check-btn::after,
-button.request-loading.delete-mini::after,
-button.request-loading.delete-dot::after {
-    left: 50%;
-    margin-left: -7px;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, .35);
+    animation: request-spin .7s linear infinite;
 }
 
 @keyframes request-spin {
