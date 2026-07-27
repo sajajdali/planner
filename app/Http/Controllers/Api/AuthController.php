@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Services\ShsmsService;
+use App\Services\ShSmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -54,7 +54,7 @@ class AuthController extends Controller
         return ['user' => $this->userPayload($user)];
     }
 
-    public function sendPhoneCode(Request $request, ShsmsService $sms)
+    public function sendPhoneCode(Request $request, ShSmsService $sms)
     {
         $data = $request->validate([
             'phone' => ['required', 'regex:/^09\d{9}$/'],
