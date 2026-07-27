@@ -1222,6 +1222,14 @@ class PlannerController extends Controller
         return $meal->fresh();
     }
 
+    public function destroyMeal(Request $request, MealEntry $meal)
+    {
+        abort_unless($meal->user_id === $request->user()->id, 404);
+        $meal->delete();
+
+        return response()->noContent();
+    }
+
     public function reorderMeals(Request $request)
     {
         $data = $request->validate([
@@ -1341,6 +1349,29 @@ class PlannerController extends Controller
         $followUp->update(['status' => $done ? 'done' : 'pending', 'completed_at' => $done ? now() : null]);
 
         return $followUp;
+    }
+
+    public function updateFollowUp(Request $request, FollowUp $followUp)
+    {
+        abort_unless($followUp->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'person_name' => ['nullable', 'string', 'max:255'],
+            'follow_up_time' => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $followUp->update($data);
+
+        return $followUp->fresh();
+    }
+
+    public function destroyFollowUp(Request $request, FollowUp $followUp)
+    {
+        abort_unless($followUp->user_id === $request->user()->id, 404);
+        $followUp->delete();
+
+        return response()->noContent();
     }
 
     public function review(Request $request)

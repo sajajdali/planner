@@ -47,7 +47,9 @@ Route::prefix('api')->group(function () {
         Route::delete('/tasks/{task}', [PlannerController::class, 'destroyTask']);
         Route::post('/tasks/{task}/timer/{action}', [PlannerController::class, 'timer'])->whereIn('action', ['start', 'pause', 'resume', 'stop']);
         Route::post('/follow-ups', [PlannerController::class, 'storeFollowUp']);
+        Route::put('/follow-ups/{followUp}', [PlannerController::class, 'updateFollowUp']);
         Route::post('/follow-ups/{followUp}/toggle', [PlannerController::class, 'toggleFollowUp']);
+        Route::delete('/follow-ups/{followUp}', [PlannerController::class, 'destroyFollowUp']);
         Route::post('/expenses', [PlannerController::class, 'storeExpense']);
         Route::delete('/expenses/{expense}', [PlannerController::class, 'destroyExpense']);
         Route::get('/expense-categories', [PlannerController::class, 'expenseCategories']);
@@ -63,6 +65,7 @@ Route::prefix('api')->group(function () {
         Route::put('/daily-note', [PlannerController::class, 'updateDailyNote']);
         Route::post('/meals', [PlannerController::class, 'storeMeal']);
         Route::put('/meals/{meal}', [PlannerController::class, 'updateMeal']);
+        Route::delete('/meals/{meal}', [PlannerController::class, 'destroyMeal']);
         Route::post('/meals/reorder', [PlannerController::class, 'reorderMeals']);
         Route::post('/meals/{meal}/toggle', [PlannerController::class, 'toggleMeal']);
         Route::put('/routine', [PlannerController::class, 'updateRoutine']);

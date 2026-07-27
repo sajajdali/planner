@@ -32,6 +32,7 @@ type Task = {
     subtasks: Task[];
 };
 type FollowUp = { id: number; title: string; person_name: string | null; follow_up_time: string | null; status: string };
+type FollowUpDraft = { title: string; person_name: string; follow_up_time: string };
 type SubtaskDraft = { id?: number; title: string; planned_start_time: string; planned_end_time: string; priority: string };
 type DueNotification = { id: string; kind: 'task' | 'subtask' | 'follow' | 'meal'; title: string; time: string; meta: string; targetId: string; color: string; softColor: string; category_id?: number };
 type ActiveTimer = {
@@ -76,6 +77,9 @@ const newRoutineTitle = ref('');
 const newMeal = ref({ title: '', meal_time: '', meal_type: 'meal', note: '' });
 const newNutritionTask = ref({ title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' });
 const mealDrafts = ref<Record<number, { title: string; meal_time: string; meal_type: string; note: string }>>({});
+const editingMealId = ref<number | null>(null);
+const followDrafts = ref<Record<number, FollowUpDraft>>({});
+const editingFollowUpId = ref<number | null>(null);
 const activeTimer = ref<ActiveTimer | null>(null);
 const nowTick = ref(Date.now());
 let timerInterval: number | undefined;
@@ -593,6 +597,14 @@ function syncMealDraft(meal: MealEntry) {
     };
 }
 
+function syncFollowDraft(followUp: FollowUp) {
+    followDrafts.value[followUp.id] = {
+        title: followUp.title,
+        person_name: followUp.person_name ?? '',
+        follow_up_time: followUp.follow_up_time ?? '',
+    };
+}
+
 function taskTimerSeconds(task: Task) {
     if (activeTimer.value?.task_id !== task.id) return 0;
     if (activeTimer.value.status === 'paused') return activeTimer.value.duration_seconds;
@@ -704,6 +716,7 @@ async function loadPlanner() {
         inlineSubtasks.value[task.id] ||= { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     });
     followUps.value = data.followUps;
+    followUps.value.forEach(syncFollowDraft);
     expenseCategories.value = data.expenseCategories;
     financialAccounts.value = data.financialAccounts ?? [];
     expenses.value = data.expenses;
@@ -1279,11 +1292,38 @@ async function createFollowUp() {
     followPerson.value = '';
     followTime.value = '';
     followUps.value = [...followUps.value, data].sort((a, b) => (a.follow_up_time || '99:99').localeCompare(b.follow_up_time || '99:99'));
+    syncFollowDraft(data);
 }
 
 async function toggleFollowUp(id: number) {
     const { data } = await api.post(`/follow-ups/${id}/toggle`);
     followUps.value = followUps.value.map((followUp) => followUp.id === id ? data : followUp);
+    syncFollowDraft(data);
+}
+
+async function updateFollowUp(followUp: FollowUp) {
+    const draft = followDrafts.value[followUp.id];
+    if (!draft?.title.trim()) return;
+
+    const { data } = await api.put(`/follow-ups/${followUp.id}`, {
+        title: draft.title.trim(),
+        person_name: draft.person_name.trim() || null,
+        follow_up_time: draft.follow_up_time || null,
+    });
+
+    followUps.value = followUps.value
+        .map((item) => item.id === followUp.id ? data : item)
+        .sort((a, b) => (a.follow_up_time || '99:99').localeCompare(b.follow_up_time || '99:99'));
+    syncFollowDraft(data);
+    editingFollowUpId.value = null;
+}
+
+async function deleteFollowUp(followUp: FollowUp) {
+    if (!window.confirm('این پیگیری حذف شود؟')) return;
+
+    await api.delete(`/follow-ups/${followUp.id}`);
+    followUps.value = followUps.value.filter((item) => item.id !== followUp.id);
+    delete followDrafts.value[followUp.id];
 }
 
 async function createExpense() {
@@ -1370,6 +1410,15 @@ async function updateMeal(meal: MealEntry) {
 
     meals.value = meals.value.map((item) => item.id === meal.id ? data : item);
     syncMealDraft(data);
+    editingMealId.value = null;
+}
+
+async function deleteMeal(meal: MealEntry) {
+    if (!window.confirm('این وعده غذایی حذف شود؟')) return;
+
+    await api.delete(`/meals/${meal.id}`);
+    meals.value = meals.value.filter((item) => item.id !== meal.id);
+    delete mealDrafts.value[meal.id];
 }
 
 async function reorderMeal(targetMealId: number) {
@@ -1975,7 +2024,14 @@ onUnmounted(() => {
                                             <strong>{{ task.title }}</strong>
                                             <span>{{ task.planned_start_time ? `${task.planned_start_time} تا ${task.planned_end_time || ''}` : 'بدون زمان' }} · {{ priorityLabel(task.priority) }}</span>
                                         </div>
-                                        <button class="delete-dot" title="حذف تسک تغذیه" @click="deleteTask(task)">×</button>
+                                        <div class="micro-actions">
+                                            <button class="micro-icon edit" title="ویرایش تسک تغذیه" aria-label="ویرایش تسک تغذیه" @click="openEditTaskModal(task)">
+                                                <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg>
+                                            </button>
+                                            <button class="micro-icon danger" title="حذف تسک تغذیه" aria-label="حذف تسک تغذیه" @click="deleteTask(task)">
+                                                <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>
+                                            </button>
+                                        </div>
                                     </article>
                                 </div>
                                 <div v-if="!nutritionTasks.length" class="nutrition-empty">تسک تغذیه‌ای برای امروز ثبت نشده.</div>
@@ -2012,7 +2068,11 @@ onUnmounted(() => {
                                 >
                                     <button class="meal-check" @click="toggleMeal(meal)">✓</button>
                                     <i>{{ mealTypeIcon[meal.meal_type] }}</i>
-                                    <div class="meal-edit-grid">
+                                    <div v-if="editingMealId !== meal.id" class="meal-summary">
+                                        <strong>{{ meal.title }}</strong>
+                                        <span>{{ mealTypeLabels[meal.meal_type] || 'وعده' }} · {{ meal.meal_time || 'بدون ساعت' }}<template v-if="meal.note"> · {{ meal.note }}</template></span>
+                                    </div>
+                                    <div v-else class="meal-edit-grid">
                                         <input v-model="mealDrafts[meal.id].title" placeholder="عنوان وعده" @keyup.enter="updateMeal(meal)" />
                                         <input v-model="mealDrafts[meal.id].meal_time" type="time" @change="updateMeal(meal)" />
                                         <select v-model="mealDrafts[meal.id].meal_type" @change="updateMeal(meal)">
@@ -2024,7 +2084,20 @@ onUnmounted(() => {
                                             <option value="meal">وعده</option>
                                         </select>
                                         <input v-model="mealDrafts[meal.id].note" placeholder="یادداشت" @keyup.enter="updateMeal(meal)" />
-                                        <button @click="updateMeal(meal)">ذخیره</button>
+                                        <button class="micro-icon save" title="ذخیره وعده" aria-label="ذخیره وعده" @click="updateMeal(meal)">
+                                            <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>
+                                        </button>
+                                    </div>
+                                    <div class="micro-actions">
+                                        <button v-if="editingMealId !== meal.id" class="micro-icon edit" title="ویرایش وعده" aria-label="ویرایش وعده" @click="editingMealId = meal.id">
+                                            <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg>
+                                        </button>
+                                        <button v-else class="micro-icon" title="بستن ویرایش" aria-label="بستن ویرایش" @click="editingMealId = null; syncMealDraft(meal)">
+                                            <svg viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+                                        </button>
+                                        <button class="micro-icon danger" title="حذف وعده" aria-label="حذف وعده" @click="deleteMeal(meal)">
+                                            <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>
+                                        </button>
                                     </div>
                                 </article>
                                 </div>
@@ -2043,7 +2116,26 @@ onUnmounted(() => {
                         </div>
                         <div v-for="followUp in followUps" :id="`follow-${followUp.id}`" :key="followUp.id" class="follow-item" :class="{ done: followUp.status === 'done' }">
                             <button class="check-btn" :class="{ checked: followUp.status === 'done' }" @click="toggleFollowUp(followUp.id)">✓</button>
-                            <div><strong>{{ followUp.title }}</strong><span>{{ followUp.person_name || 'بدون شخص' }} · {{ followUp.follow_up_time || 'بدون ساعت' }}</span></div>
+                            <div v-if="editingFollowUpId !== followUp.id" class="follow-summary"><strong>{{ followUp.title }}</strong><span>{{ followUp.person_name || 'بدون شخص' }} · {{ followUp.follow_up_time || 'بدون ساعت' }}</span></div>
+                            <div v-else class="follow-edit-grid">
+                                <input v-model="followDrafts[followUp.id].title" placeholder="عنوان" @keyup.enter="updateFollowUp(followUp)" />
+                                <input v-model="followDrafts[followUp.id].person_name" placeholder="شخص/موضوع" @keyup.enter="updateFollowUp(followUp)" />
+                                <input v-model="followDrafts[followUp.id].follow_up_time" type="time" @change="updateFollowUp(followUp)" />
+                                <button class="micro-icon save" title="ذخیره پیگیری" aria-label="ذخیره پیگیری" @click="updateFollowUp(followUp)">
+                                    <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>
+                                </button>
+                            </div>
+                            <div class="micro-actions">
+                                <button v-if="editingFollowUpId !== followUp.id" class="micro-icon edit" title="ویرایش پیگیری" aria-label="ویرایش پیگیری" @click="editingFollowUpId = followUp.id">
+                                    <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg>
+                                </button>
+                                <button v-else class="micro-icon" title="بستن ویرایش" aria-label="بستن ویرایش" @click="editingFollowUpId = null; syncFollowDraft(followUp)">
+                                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+                                </button>
+                                <button class="micro-icon danger" title="حذف پیگیری" aria-label="حذف پیگیری" @click="deleteFollowUp(followUp)">
+                                    <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>
+                                </button>
+                            </div>
                         </div>
                     </section>
 

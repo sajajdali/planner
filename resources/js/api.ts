@@ -59,6 +59,7 @@ function findDeletingTarget(button: HTMLButtonElement | null): HTMLElement | nul
         '.task-card',
         '.inline-subtask',
         '.meal-item',
+        '.follow-item',
         '.expense-list article',
         '.installment-list article',
         '.debt-list article',
