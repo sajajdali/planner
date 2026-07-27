@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    body{margin:0;background:#F3F5F9;}
+    * { box-sizing: border-box; font-family: 'Vazirmatn', sans-serif; }
+    @keyframes taskDone { 0%{transform:scale(1);} 40%{transform:scale(1.03);} 100%{transform:scale(1);} }
+    @keyframes popIn { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+    @keyframes pulseRing { 0%{box-shadow:0 0 0 0 rgba(37,99,235,.35);} 100%{box-shadow:0 0 0 8px rgba(37,99,235,0);} }
+    a{color:#2563EB; text-decoration:none;}
+    a:hover{color:#1D4ED8; text-decoration:underline;}
+    input::placeholder, textarea::placeholder{color:#9AA3B2;}
+  </style>
+</helmet>
+<div style="direction:rtl; min-height:100vh; background:#F3F5F9; display:flex; color:#1E2433;">
+
+  <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+    <aside style="width:236px; flex-shrink:0; background:#181E2E; color:#C9CEDB; display:flex; flex-direction:column; padding:22px 16px; gap:4px; min-height:100vh; position:sticky; top:0;">
+      <div style="display:flex; align-items:center; gap:10px; padding:6px 8px 22px 8px;">
+        <div style="width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#2563EB,#06B6D4); display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:16px;">ر</div>
+        <div style="font-weight:700; color:#fff; font-size:15px;">برنامه‌ریز روزانه</div>
+      </div>
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="8">
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; background:{{ item.bg }}; color:{{ item.color }}; font-size:14px; font-weight:{{ item.weight }};">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ item.icon }}"></path></svg>
+          <span>{{ item.label }}</span>
+        </div>
+      </sc-for>
+      <div style="margin-top:auto; display:flex; align-items:center; gap:10px; padding:12px 8px; border-top:1px solid #2A3145;">
+        <div style="width:32px; height:32px; border-radius:50%; background:#2A3145; display:flex; align-items:center; justify-content:center; font-size:13px; color:#fff;">آر</div>
+        <div style="font-size:13px; color:#8B92A6;">آرمین رضایی</div>
+      </div>
+    </aside>
+  </sc-if>
+
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+
+    <header style="height:64px; background:#fff; border-bottom:1px solid #E7EAF0; display:flex; align-items:center; justify-content:space-between; padding:0 20px; position:sticky; top:0; z-index:20; gap:12px;">
+      <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+        <div style="display:flex; align-items:center; gap:8px; background:#F3F5F9; border-radius:10px; padding:8px 12px; width:220px; max-width:40vw;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA3B2" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+          <input placeholder="جست‌وجوی وظایف..." style="border:none; background:transparent; outline:none; font-size:13px; width:100%; color:#1E2433;"/>
+        </div>
+      </div>
+      <sc-if value="{{ activeTimerInfo }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; gap:10px; background:#FFF7ED; border:1px solid #FED7AA; border-radius:12px; padding:8px 14px; animation: pulseRing 1.8s infinite;">
+          <span style="width:8px; height:8px; border-radius:50%; background:#F97316;"></span>
+          <span style="font-size:13px; font-weight:600; color:#9A3412;">{{ activeTimerInfo.title }}</span>
+          <span style="font-size:13px; font-variant-numeric:tabular-nums; color:#C2410C; font-weight:700;">{{ activeTimerInfo.elapsedLabel }}</span>
+        </div>
+      </sc-if>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#4B5566" stroke-width="1.8" style="cursor:pointer;"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 01-3.4 0"></path></svg>
+        <div style="width:34px; height:34px; border-radius:50%; background:#EEF2FF; display:flex; align-items:center; justify-content:center; font-size:13px; color:#4338CA; font-weight:700;">آر</div>
+      </div>
+    </header>
+
+    <main style="flex:1; padding:24px; max-width:1180px; width:100%; margin:0 auto; display:flex; flex-direction:column; gap:20px;">
+
+      <section style="background:#fff; border-radius:18px; padding:20px 22px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; box-shadow:0 1px 2px rgba(20,25,40,.04);">
+        <div>
+          <div style="font-size:20px; font-weight:800; color:#1E2433;">برنامه امروز</div>
+          <div style="font-size:13px; color:#7A8194; margin-top:4px;">{{ weekdayLabel }} — {{ persianDateLabel }}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button onClick="{{ goPrevDay }}" style="width:34px; height:34px; border-radius:10px; border:1px solid #E7EAF0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B5566" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg>
+          </button>
+          <button onClick="{{ goToday }}" style="height:34px; padding:0 14px; border-radius:10px; border:1px solid #E7EAF0; background:{{ todayBtnBg }}; color:{{ todayBtnColor }}; cursor:pointer; font-size:13px; font-weight:600;">امروز</button>
+          <button onClick="{{ goNextDay }}" style="width:34px; height:34px; border-radius:10px; border:1px solid #E7EAF0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B5566" stroke-width="2"><path d="M15 6l-6 6 6 6"></path></svg>
+          </button>
+          <input type="date" value="{{ isoDate }}" onChange="{{ onDatePick }}" style="height:34px; border-radius:10px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; color:#4B5566; background:#fff;"/>
+        </div>
+      </section>
+
+      <section style="display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:stretch;">
+        <div style="background:#fff; border-radius:18px; padding:18px 24px; display:flex; align-items:center; gap:16px; box-shadow:0 1px 2px rgba(20,25,40,.04);">
+          <svg width="86" height="86" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#EEF1F6" stroke-width="10"></circle>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#2563EB" stroke-width="10" stroke-linecap="round" stroke-dasharray="{{ summary.dashArray }}" transform="rotate(-90 50 50)"></circle>
+          </svg>
+          <div style="margin-right:-8px;">
+            <div style="font-size:26px; font-weight:800; color:#1E2433;">{{ summary.percent }}٪</div>
+            <div style="font-size:12px; color:#8B92A6;">پیشرفت روز</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+          <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(20,25,40,.04);">
+            <div style="font-size:12px; color:#8B92A6;">کل وظایف</div>
+            <div style="font-size:22px; font-weight:800; margin-top:6px;">{{ summary.total }}</div>
+          </div>
+          <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(20,25,40,.04);">
+            <div style="font-size:12px; color:#8B92A6;">انجام‌شده</div>
+            <div style="font-size:22px; font-weight:800; margin-top:6px; color:#16A34A;">{{ summary.done }}</div>
+          </div>
+          <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(20,25,40,.04);">
+            <div style="font-size:12px; color:#8B92A6;">باقی‌مانده</div>
+            <div style="font-size:22px; font-weight:800; margin-top:6px; color:#F97316;">{{ summary.remaining }}</div>
+          </div>
+          <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:0 1px 2px rgba(20,25,40,.04); min-width:0;">
+            <div style="font-size:12px; color:#8B92A6; white-space:nowrap;">زمان واقعی</div>
+            <div style="font-size:15px; font-weight:800; margin-top:6px; white-space:nowrap;">{{ summary.actualLabel }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section style="display:flex; gap:8px; overflow-x:auto; padding-bottom:2px;">
+        <sc-for list="{{ viewTabs }}" as="tab" hint-placeholder-count="5">
+          <button onClick="{{ tab.onClick }}" style="height:36px; padding:0 16px; border-radius:10px; border:1px solid {{ tab.border }}; background:{{ tab.bg }}; color:{{ tab.color }}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">{{ tab.label }}</button>
+        </sc-for>
+      </section>
+
+      <sc-if value="{{ isTimelineView }}" hint-placeholder-val="{{ false }}">
+        <section style="background:#fff; border-radius:18px; padding:18px; box-shadow:0 1px 2px rgba(20,25,40,.04);">
+          <div style="display:grid; grid-template-columns:56px 1fr;">
+            <sc-for list="{{ timelineHours }}" as="hr" hint-placeholder-count="16">
+              <div style="height:56px; font-size:11px; color:#9AA3B2; text-align:left; padding-left:6px; border-top:1px solid #F0F2F6;">{{ hr.label }}</div>
+            </sc-for>
+            <div style="position:relative; border-right:1px solid #F0F2F6;">
+              <sc-for list="{{ timelineHours }}" as="hr2" hint-placeholder-count="16">
+                <div onDragOver="{{ hr2.onDragOver }}" onDrop="{{ hr2.onDrop }}" style="height:56px; border-top:1px solid #F0F2F6;"></div>
+              </sc-for>
+              <sc-for list="{{ timelineTasks }}" as="tt" hint-placeholder-count="4">
+                <div draggable="true" onDragStart="{{ tt.onDragStart }}" style="position:absolute; right:8px; left:8px; top:{{ tt.top }}px; height:{{ tt.height }}px; background:{{ tt.bg }}; border-right:4px solid {{ tt.border }}; border-radius:10px; padding:6px 10px; cursor:grab; overflow:hidden;">
+                  <div style="font-size:12.5px; font-weight:700; color:{{ tt.textColor }};">{{ tt.title }}</div>
+                  <div style="font-size:11px; color:{{ tt.textColor }}; opacity:.75;">{{ tt.timeLabel }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <sc-if value="{{ unscheduled.length }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:16px; padding-top:14px; border-top:1px dashed #E7EAF0;">
+              <div style="font-size:12px; color:#8B92A6; margin-bottom:8px;">بدون زمان مشخص</div>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <sc-for list="{{ unscheduled }}" as="us" hint-placeholder-count="3">
+                  <div style="padding:6px 12px; border-radius:20px; background:{{ us.bg }}; color:{{ us.textColor }}; font-size:12.5px; font-weight:600;">{{ us.title }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ isCategoryView }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ categoryCards }}" as="cat" hint-placeholder-count="5">
+          <section style="background:#fff; border-radius:18px; box-shadow:0 1px 2px rgba(20,25,40,.04); overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:14px; padding:16px 20px; cursor:pointer;" onClick="{{ cat.toggleCollapse }}">
+              <div style="width:42px; height:42px; border-radius:12px; background:{{ cat.softBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ cat.color }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ cat.icon }}"></path></svg>
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-weight:700; font-size:15px;">{{ cat.name }}</span>
+                  <span style="font-size:12px; color:#8B92A6;">{{ cat.doneCount }} از {{ cat.total }} وظیفه انجام شده</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+                  <div style="flex:1; max-width:260px; height:6px; border-radius:4px; background:#F0F2F6; overflow:hidden;">
+                    <div style="height:100%; border-radius:4px; background:{{ cat.color }}; width:{{ cat.percentLabel }};"></div>
+                  </div>
+                  <span style="font-size:12px; font-weight:700; color:{{ cat.color }};">{{ cat.percentLabel }}</span>
+                  <span style="font-size:12px; color:#8B92A6;">· {{ cat.timeLabel }}</span>
+                </div>
+              </div>
+              <button onClick="{{ cat.onAddTask }}" style="width:32px; height:32px; border-radius:9px; border:none; background:{{ cat.softBg }}; color:{{ cat.color }}; cursor:pointer; font-size:18px; line-height:1; flex-shrink:0;">＋</button>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA3B2" stroke-width="2" style="transform:{{ cat.chevronRotate }}; flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+
+            <sc-if value="{{ cat.expanded }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:0 20px 18px 20px; display:flex; flex-direction:column; gap:10px;">
+                <sc-for list="{{ cat.tasks }}" as="task" hint-placeholder-count="3">
+                  <div draggable="true" onDragStart="{{ task.onDragStart }}" onDragOver="{{ task.onDragOver }}" onDrop="{{ task.onDrop }}" style="border:1px solid #EEF0F5; border-right:4px solid {{ task.accentColor }}; border-radius:14px; padding:12px 14px; opacity:{{ task.opacity }}; animation:{{ task.anim }}; background:{{ task.cardBg }}; cursor:grab;">
+                    <div style="display:flex; align-items:flex-start; gap:10px;">
+                      <span style="width:21px; height:21px; border-radius:50%; background:{{ task.accentColor }}; color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px;">{{ task.numberLabel }}</span>
+                      <button onClick="{{ task.onToggle }}" style="margin-top:2px; width:21px; height:21px; border-radius:6px; border:2px solid {{ task.checkBorder }}; background:{{ task.checkBg }}; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;">
+                        <sc-if value="{{ task.done }}" hint-placeholder-val="{{ false }}">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"></path></svg>
+                        </sc-if>
+                      </button>
+                      <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                          <span style="font-size:14px; font-weight:600; text-decoration:{{ task.strike }}; color:{{ task.titleColor }};">{{ task.title }}</span>
+                          <span style="font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; background:{{ task.prioBg }}; color:{{ task.prioColor }};">{{ task.priorityLabel }}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:4px; flex-wrap:wrap;">
+                          <sc-if value="{{ task.timeLabel }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-size:11.5px; color:#8B92A6;">{{ task.timeLabel }}</span>
+                          </sc-if>
+                          <sc-if value="{{ task.subtaskLabel }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-size:11.5px; color:#8B92A6;">{{ task.subtaskLabel }}</span>
+                          </sc-if>
+                          <span onClick="{{ task.toggleExpand }}" style="font-size:11.5px; color:{{ cat.color }}; cursor:pointer; font-weight:600;">{{ task.expandLabel }}</span>
+                        </div>
+
+                        <sc-if value="{{ task.expanded }}" hint-placeholder-val="{{ true }}">
+                          <div style="margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+                            <sc-for list="{{ task.subtasks }}" as="sub" hint-placeholder-count="2">
+                              <div draggable="true" onDragStart="{{ sub.onDragStart }}" onDragOver="{{ sub.onDragOver }}" onDrop="{{ sub.onDrop }}" style="display:flex; align-items:center; gap:8px; background:#F8F9FC; border-radius:9px; padding:7px 10px; cursor:grab;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C3C9D6" stroke-width="2"><path d="M8 6h8M8 12h8M8 18h8"></path></svg>
+                                <button onClick="{{ sub.onToggle }}" style="width:16px; height:16px; border-radius:5px; border:2px solid {{ sub.checkBorder }}; background:{{ sub.checkBg }}; cursor:pointer; flex-shrink:0;"></button>
+                                <span style="font-size:12.5px; text-decoration:{{ sub.strike }}; color:{{ sub.color }}; flex:1;">{{ sub.title }}</span>
+                              </div>
+                            </sc-for>
+                            <div style="display:flex; align-items:center; gap:8px; background:#F8F9FC; border-radius:9px; padding:6px 10px; border:1px dashed #E1E5EC;">
+                              <button onClick="{{ task.onAddSubtaskClick }}" style="width:16px; height:16px; border-radius:5px; border:none; background:{{ task.accentColor }}; color:#fff; cursor:pointer; flex-shrink:0; font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0;">＋</button>
+                              <input value="{{ task.newSubtaskValue }}" onChange="{{ task.onNewSubtaskChange }}" onKeyDown="{{ task.onNewSubtaskKeyDown }}" placeholder="زیروظیفه جدید..." style="flex:1; border:none; background:transparent; outline:none; font-size:12.5px;"/>
+                            </div>
+                          </div>
+                        </sc-if>
+
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                          <sc-if value="{{ task.canStart }}" hint-placeholder-val="{{ false }}">
+                            <button onClick="{{ task.onStart }}" style="display:flex; align-items:center; gap:5px; border:none; background:{{ cat.softBg }}; color:{{ cat.color }}; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer;">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>شروع
+                            </button>
+                          </sc-if>
+                          <sc-if value="{{ task.isRunning }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-size:12px; font-weight:700; color:#F97316; font-variant-numeric:tabular-nums;">{{ task.liveElapsed }}</span>
+                            <button onClick="{{ task.onPause }}" style="border:none; background:#FFF7ED; color:#C2410C; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer;">توقف موقت</button>
+                            <button onClick="{{ task.onStop }}" style="border:none; background:#1E2433; color:#fff; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer;">پایان</button>
+                          </sc-if>
+                          <sc-if value="{{ task.isPaused }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-size:12px; font-weight:700; color:#8B92A6;">{{ task.pausedLabel }}</span>
+                            <button onClick="{{ task.onResume }}" style="border:none; background:{{ cat.softBg }}; color:{{ cat.color }}; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer;">ادامه</button>
+                            <button onClick="{{ task.onStop }}" style="border:none; background:#1E2433; color:#fff; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer;">پایان</button>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </section>
+        </sc-for>
+      </sc-if>
+
+      <section style="background:#fff; border-radius:18px; box-shadow:0 1px 2px rgba(20,25,40,.04); padding:18px 20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="font-size:15px; font-weight:700;">زنگ‌ها و پیگیری‌ها</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:12px; color:#8B92A6;">{{ followUps.length }} مورد</span>
+            <button onClick="{{ onOpenFollowUpAdd }}" style="border:none; background:#EEF2FF; color:#4338CA; font-size:12px; font-weight:700; padding:6px 12px; border-radius:8px; cursor:pointer;">＋ افزودن پیگیری</button>
+          </div>
+        </div>
+        <sc-if value="{{ followUpQuickOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; gap:8px; padding:10px; border-radius:12px; background:#F8F9FC; border:1px dashed #E7EAF0; margin-bottom:10px; flex-wrap:wrap;">
+            <input value="{{ followUpDraft.title }}" onChange="{{ followUpDraft.onTitle }}" placeholder="عنوان پیگیری..." autoFocus="true" style="flex:2; min-width:140px; border:none; background:#fff; border-radius:8px; padding:8px 10px; outline:none; font-size:13px;"/>
+            <input value="{{ followUpDraft.person }}" onChange="{{ followUpDraft.onPerson }}" placeholder="شخص/موضوع" style="flex:1; min-width:110px; border:none; background:#fff; border-radius:8px; padding:8px 10px; outline:none; font-size:13px;"/>
+            <input value="{{ followUpDraft.time }}" onChange="{{ followUpDraft.onTime }}" placeholder="ساعت" style="width:90px; border:none; background:#fff; border-radius:8px; padding:8px 10px; outline:none; font-size:13px;"/>
+            <button onClick="{{ onSubmitFollowUp }}" style="border:none; background:#1E2433; color:#fff; border-radius:8px; padding:0 16px; font-size:13px; font-weight:600; cursor:pointer;">افزودن</button>
+          </div>
+        </sc-if>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <sc-for list="{{ followUpCards }}" as="fu" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:#F8F9FC;">
+              <button onClick="{{ fu.onToggle }}" style="width:19px; height:19px; border-radius:6px; border:2px solid {{ fu.checkBorder }}; background:{{ fu.checkBg }}; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;">
+                <sc-if value="{{ fu.done }}" hint-placeholder-val="{{ false }}">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"></path></svg>
+                </sc-if>
+              </button>
+              <div style="width:8px; height:8px; border-radius:50%; background:{{ fu.dotColor }}; flex-shrink:0;"></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13.5px; font-weight:600; text-decoration:{{ fu.strike }}; color:{{ fu.titleColor }};">{{ fu.title }}</div>
+                <div style="font-size:11.5px; color:#8B92A6; margin-top:2px;">{{ fu.person }} · {{ fu.time }}</div>
+              </div>
+              <span style="font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; background:{{ fu.statusBg }}; color:{{ fu.statusColor }};">{{ fu.statusLabel }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="background:#fff; border-radius:18px; box-shadow:0 1px 2px rgba(20,25,40,.04); padding:22px;">
+        <div style="font-size:16px; font-weight:800; margin-bottom:18px;">گزارش امروز</div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:22px;">
+          <sc-for list="{{ reportStats }}" as="st" hint-placeholder-count="6">
+            <div style="background:#F8F9FC; border-radius:14px; padding:14px;">
+              <div style="font-size:11.5px; color:#8B92A6;">{{ st.label }}</div>
+              <div style="font-size:19px; font-weight:800; margin-top:4px; color:{{ st.color }};">{{ st.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+          <div>
+            <div style="font-size:12.5px; color:#8B92A6; margin-bottom:10px;">تقسیم زمان بین دسته‌ها</div>
+            <div style="display:flex; align-items:center; gap:20px;">
+              <div style="width:120px; height:120px; border-radius:50%; background:{{ pieGradient }}; flex-shrink:0;"></div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <sc-for list="{{ categoryCards }}" as="legend" hint-placeholder-count="5">
+                  <div style="display:flex; align-items:center; gap:7px; font-size:12px; color:#4B5566;">
+                    <span style="width:9px; height:9px; border-radius:2px; background:{{ legend.color }};"></span>{{ legend.name }} · {{ legend.timeLabel }}
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px; color:#8B92A6; margin-bottom:10px;">زمان هر دسته (برنامه‌ریزی‌شده / واقعی)</div>
+            <div style="display:flex; align-items:flex-end; gap:14px; height:130px; padding-top:10px;">
+              <sc-for list="{{ barChart }}" as="bar" hint-placeholder-count="5">
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end;">
+                  <div style="display:flex; align-items:flex-end; gap:3px; height:100%;">
+                    <div style="width:9px; border-radius:4px 4px 0 0; background:#E7EAF0; height:{{ bar.plannedH }}%;"></div>
+                    <div style="width:9px; border-radius:4px 4px 0 0; background:{{ bar.color }}; height:{{ bar.actualH }}%;"></div>
+                  </div>
+                  <span style="font-size:10.5px; color:#8B92A6;">{{ bar.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ reviewSubmitted }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:20px; padding:20px; border-radius:16px; background:linear-gradient(135deg,#EEF2FF,#ECFDF5); animation:popIn .4s ease;">
+            <svg width="92" height="92" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#E2E6F0" stroke-width="9"></circle>
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#16A34A" stroke-width="9" stroke-linecap="round" stroke-dasharray="{{ summary.dashArray }}" transform="rotate(-90 50 50)"></circle>
+            </svg>
+            <div>
+              <div style="font-size:20px; font-weight:800;">امروز {{ summary.percent }}٪ از برنامه‌ات را انجام دادی!</div>
+              <div style="font-size:13px; color:#7A8194; margin-top:6px;">جمع‌بندی روز ثبت شد. فردا روز بهتری خواهد بود.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ notReviewSubmitted }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+              <div>
+                <label style="font-size:12.5px; color:#4B5566; font-weight:600;">مهم‌ترین دستاورد امروز</label>
+                <input value="{{ review.achievement }}" onChange="{{ review.onAchievement }}" placeholder="مثلاً: تکمیل صفحه ورود" style="width:100%; margin-top:6px; height:38px; border-radius:10px; border:1px solid #E7EAF0; padding:0 12px; font-size:13px; outline:none;"/>
+              </div>
+              <div>
+                <label style="font-size:12.5px; color:#4B5566; font-weight:600;">چه چیزی باید فردا بهتر شود؟</label>
+                <input value="{{ review.improvement }}" onChange="{{ review.onImprovement }}" placeholder="مثلاً: شروع زودتر تایمر" style="width:100%; margin-top:6px; height:38px; border-radius:10px; border:1px solid #E7EAF0; padding:0 12px; font-size:13px; outline:none;"/>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
+              <div>
+                <label style="font-size:12.5px; color:#4B5566; font-weight:600;">رضایت از روز: {{ review.satisfaction }}</label>
+                <input type="range" min="1" max="10" value="{{ review.satisfaction }}" onChange="{{ review.onSatisfaction }}" style="width:100%; margin-top:10px; accent-color:#2563EB;"/>
+              </div>
+              <div>
+                <label style="font-size:12.5px; color:#4B5566; font-weight:600;">میزان انرژی: {{ review.energy }}</label>
+                <input type="range" min="1" max="10" value="{{ review.energy }}" onChange="{{ review.onEnergy }}" style="width:100%; margin-top:10px; accent-color:#F97316;"/>
+              </div>
+              <div>
+                <label style="font-size:12.5px; color:#4B5566; font-weight:600;">میزان تمرکز: {{ review.focus }}</label>
+                <input type="range" min="1" max="10" value="{{ review.focus }}" onChange="{{ review.onFocus }}" style="width:100%; margin-top:10px; accent-color:#8B5CF6;"/>
+              </div>
+            </div>
+            <button onClick="{{ onSubmitReview }}" style="align-self:flex-start; border:none; background:#1E2433; color:#fff; font-size:13.5px; font-weight:700; padding:11px 22px; border-radius:12px; cursor:pointer;">ثبت جمع‌بندی روز</button>
+          </div>
+        </sc-if>
+      </section>
+
+    </main>
+  </div>
+
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; bottom:0; left:0; right:0; height:64px; background:#fff; border-top:1px solid #E7EAF0; display:flex; align-items:center; justify-content:space-around; z-index:30;">
+      <sc-for list="{{ mobileNav }}" as="mn" hint-placeholder-count="5">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:3px; color:{{ mn.color }}; font-size:10.5px;">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="{{ mn.icon }}"></path></svg>{{ mn.label }}
+        </div>
+      </sc-for>
+    </div>
+    <button style="position:fixed; bottom:80px; left:20px; width:54px; height:54px; border-radius:50%; background:#2563EB; color:#fff; border:none; font-size:26px; box-shadow:0 8px 20px rgba(37,99,235,.4); cursor:pointer; z-index:31;">＋</button>
+  </sc-if>
+
+  <sc-if value="{{ taskModal }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(20,25,40,.5); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;">
+      <div style="background:#fff; border-radius:18px; padding:24px; width:460px; max-width:92vw; max-height:86vh; overflow-y:auto;">
+        <div style="font-size:15px; font-weight:700; margin-bottom:16px;">افزودن وظیفه جدید</div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; color:#4B5566;">عنوان</label>
+            <input value="{{ taskModal.title }}" onChange="{{ taskModal.onTitle }}" autoFocus="true" placeholder="عنوان وظیفه" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; box-sizing:border-box;"/>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; color:#4B5566;">توضیحات</label>
+            <textarea value="{{ taskModal.description }}" onChange="{{ taskModal.onDescription }}" placeholder="توضیح کوتاه..." rows="2" style="width:100%; margin-top:5px; border-radius:9px; border:1px solid #E7EAF0; padding:8px 10px; font-size:13px; outline:none; resize:vertical; box-sizing:border-box;"></textarea>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#4B5566;">ساعت شروع</label>
+              <input type="time" value="{{ taskModal.plannedStart }}" onChange="{{ taskModal.onPlannedStart }}" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; box-sizing:border-box;"/>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#4B5566;">ساعت پایان</label>
+              <input type="time" value="{{ taskModal.plannedEnd }}" onChange="{{ taskModal.onPlannedEnd }}" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; box-sizing:border-box;"/>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#4B5566;">مدت تخمینی (دقیقه)</label>
+              <input type="number" value="{{ taskModal.estimatedMin }}" onChange="{{ taskModal.onEstimatedMin }}" placeholder="مثلاً 30" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; box-sizing:border-box;"/>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#4B5566;">اولویت</label>
+              <select value="{{ taskModal.priority }}" onChange="{{ taskModal.onPriority }}" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; background:#fff; box-sizing:border-box;">
+                <option value="کم">کم</option>
+                <option value="متوسط">متوسط</option>
+                <option value="زیاد">زیاد</option>
+                <option value="فوری">فوری</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; color:#4B5566;">یادداشت</label>
+            <textarea value="{{ taskModal.note }}" onChange="{{ taskModal.onNote }}" placeholder="یادداشت..." rows="2" style="width:100%; margin-top:5px; border-radius:9px; border:1px solid #E7EAF0; padding:8px 10px; font-size:13px; outline:none; resize:vertical; box-sizing:border-box;"></textarea>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#4B5566;">لینک</label>
+              <input value="{{ taskModal.link }}" onChange="{{ taskModal.onLink }}" placeholder="https://" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; box-sizing:border-box;"/>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:600; color:#4B5566;">برچسب‌ها</label>
+              <input value="{{ taskModal.tags }}" onChange="{{ taskModal.onTags }}" placeholder="با کاما جدا کنید" style="width:100%; margin-top:5px; height:36px; border-radius:9px; border:1px solid #E7EAF0; padding:0 10px; font-size:13px; outline:none; box-sizing:border-box;"/>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; color:#4B5566;">زیروظیفه‌ها</label>
+            <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+              <sc-for list="{{ taskModal.subtasks }}" as="ms" hint-placeholder-count="0">
+                <div style="display:flex; align-items:center; gap:8px; background:#F8F9FC; border-radius:8px; padding:6px 10px;">
+                  <span style="flex:1; font-size:12.5px;">{{ ms.title }}</span>
+                  <button onClick="{{ ms.onRemove }}" style="border:none; background:transparent; color:#9AA3B2; cursor:pointer; font-size:14px; line-height:1;">×</button>
+                </div>
+              </sc-for>
+              <div style="display:flex; gap:6px;">
+                <input value="{{ taskModal.newSubtask }}" onChange="{{ taskModal.onNewSubtask }}" onKeyDown="{{ taskModal.onNewSubtaskKeyDown }}" placeholder="زیروظیفه جدید..." style="flex:1; height:32px; border-radius:8px; border:1px solid #E7EAF0; padding:0 10px; font-size:12.5px; outline:none; box-sizing:border-box;"/>
+                <button onClick="{{ taskModal.onAddSubtask }}" style="width:32px; height:32px; border-radius:8px; border:none; background:#F0F2F6; color:#4B5566; cursor:pointer; font-size:16px; flex-shrink:0;">＋</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+          <button onClick="{{ onCancelTaskModal }}" style="border:1px solid #E7EAF0; background:#fff; padding:9px 16px; border-radius:10px; font-size:13px; cursor:pointer;">انصراف</button>
+          <button onClick="{{ onSubmitTaskModal }}" style="border:none; background:#1E2433; color:#fff; padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">افزودن وظیفه</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ timerConflict }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(20,25,40,.5); display:flex; align-items:center; justify-content:center; z-index:50;">
+      <div style="background:#fff; border-radius:18px; padding:24px; width:360px; max-width:90vw;">
+        <div style="font-size:15px; font-weight:700; margin-bottom:8px;">تایمر دیگری در حال اجراست</div>
+        <div style="font-size:13px; color:#7A8194; margin-bottom:18px;">تایمر «{{ timerConflict.currentTitle }}» فعال است. ابتدا آن را متوقف کنید یا تایمر فعلی را متوقف و تایمر جدید را آغاز کنید.</div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button onClick="{{ onCancelConflict }}" style="border:1px solid #E7EAF0; background:#fff; padding:9px 16px; border-radius:10px; font-size:13px; cursor:pointer;">انصراف</button>
+          <button onClick="{{ onSwitchTimer }}" style="border:none; background:#1E2433; color:#fff; padding:9px 16px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">توقف و شروع جدید</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ICONS = {
+  work: "M4 7h16v11H4z M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2 M4 12h16",
+  sport: "M4 9v6M2 8v8M20 9v6M22 8v8M7 12h10",
+  nutrition: "M12 7c-2 0-4 2-4 5s2 6 4 6 2-1 3-1 1 1 3 1c2 0 4-3 4-6a4.5 4.5 0 00-4-5c-1 0-1.5 .5-3 .5s-2-.5-3-.5z M12 7V4",
+  education: "M4 5c2-1 5-1 8 0v14c-3-1-6-1-8 0z M20 5c-2-1-5-1-8 0v14c3-1 6-1 8 0z",
+  life: "M12 20s-7-4.5-9-9c-1.5-3 .5-6 3.5-6 2 0 3.5 1.5 5.5 4 2-2.5 3.5-4 5.5-4 3 0 5 3 3.5 6-2 4.5-9 9-9 9z"
+};
+const NAV_ICONS = {
+  dashboard: "M4 13h6V4H4v9zM14 20h6v-9h-6v9zM14 4v5h6V4h-6zM4 20h6v-5H4v5z",
+  today: "M4 5h16v16H4z M8 3v4M16 3v4M4 9h16",
+  calendar: "M4 5h16v16H4z M8 3v4M16 3v4M4 9h16M8 13h3M13 13h3M8 17h3",
+  list: "M6 6h14M6 12h14M6 18h14M3 6h.01M3 12h.01M3 18h.01",
+  backlog: "M5 5h14M5 12h14M5 19h9",
+  followups: "M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0",
+  reports: "M4 20V10M11 20V4M18 20v-7",
+  settings: "M12 15a3 3 0 100-6 3 3 0 000 6z M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14.3 3H9.7l-.3 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.5 2 3.4 2.3-.9c.6.5 1.3.9 2 1.2l.3 2.6h4.6l.3-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.07-.4.1-.8.1-1.2z"
+};
+function fmtMinCompact(min){
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  if(h<=0) return m + 'د';
+  if(m===0) return h + 'س';
+  return h + 'س ' + m + 'د';
+}
+function fmtMin(min){
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  if(h<=0) return m + ' دقیقه';
+  if(m===0) return h + ' ساعت';
+  return h + ' ساعت و ' + m + ' دقیقه';
+}
+function fmtClock(sec){
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = Math.floor(sec%60);
+  const pad = n => String(n).padStart(2,'0');
+  return (h>0? pad(h)+':' : '') + pad(m) + ':' + pad(s);
+}
+function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+const FA_DIGITS = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+function toPersianDigits(n){ return String(n).split('').map(c=> /[0-9]/.test(c)? FA_DIGITS[+c] : c).join(''); }
+
+class Component extends DCLogic {
+  state = {
+    viewportWidth: typeof window!=='undefined'? window.innerWidth : 1440,
+    dateOffset: 0,
+    viewMode: 'category',
+    now: Date.now(),
+    activeTimer: null, // {taskId, startedAt, accumulatedSec, status:'running'|'paused'}
+    timerConflictTaskId: null,
+    expandedTasks: {},
+    collapsedCategories: {},
+    quickAddOpenFor: null,
+    quickAddValues: {},
+    draggedSub: null,
+    draggedTimelineTask: null,
+    reviewSubmitted: false,
+    review: { achievement:'', improvement:'', satisfaction:7, energy:6, focus:6 },
+    draggedTask: null,
+    followUpQuickOpen: false,
+    followUpDraft: { title:'', person:'', time:'' },
+    newSubtaskDrafts: {},
+    taskModal: null,
+    categories: [
+      { id:'work', name:'کاری', color:'#2563EB', soft:'#EAF1FF', icon: ICONS.work },
+      { id:'sport', name:'ورزش', color:'#F97316', soft:'#FFF1E6', icon: ICONS.sport },
+      { id:'nutrition', name:'تغذیه', color:'#10B981', soft:'#E7F9F1', icon: ICONS.nutrition },
+      { id:'education', name:'آموزش', color:'#8B5CF6', soft:'#F1ECFE', icon: ICONS.education },
+      { id:'life', name:'زندگی', color:'#06B6D4', soft:'#E4F8FB', icon: ICONS.life }
+    ],
+    tasks: [
+      { id:1, categoryId:'work', title:'توسعه صفحه ورود', priority:'زیاد', status:'done', plannedStart:'09:00', plannedEnd:'10:00', actualSec:45*60, subtasks:[{id:'1-1',title:'طراحی UI',done:true},{id:'1-2',title:'اتصال API',done:true}] },
+      { id:2, categoryId:'work', title:'جلسه تیم', priority:'متوسط', status:'done', plannedStart:'10:15', plannedEnd:'10:45', actualSec:30*60, subtasks:[] },
+      { id:3, categoryId:'work', title:'بررسی ایمیل‌ها', priority:'کم', status:'done', plannedStart:null, plannedEnd:null, actualSec:20*60, subtasks:[] },
+      { id:4, categoryId:'work', title:'تهیه گزارش هفتگی', priority:'متوسط', status:'done', plannedStart:'13:00', plannedEnd:'13:40', actualSec:40*60, subtasks:[{id:'4-1',title:'جمع‌آوری داده',done:true},{id:'4-2',title:'نگارش',done:true},{id:'4-3',title:'ارسال',done:true}] },
+      { id:5, categoryId:'work', title:'برنامه‌ریزی اسپرینت', priority:'زیاد', status:'done', plannedStart:'11:00', plannedEnd:'11:35', actualSec:35*60, subtasks:[] },
+      { id:6, categoryId:'work', title:'ریویو کد', priority:'متوسط', status:'done', plannedStart:null, plannedEnd:null, actualSec:35*60, subtasks:[] },
+      { id:7, categoryId:'work', title:'رفع باگ داشبورد', priority:'فوری', status:'in_progress', plannedStart:'15:00', plannedEnd:'16:00', actualSec:0, subtasks:[{id:'7-1',title:'شناسایی علت',done:true},{id:'7-2',title:'رفع و تست',done:false}] },
+      { id:8, categoryId:'work', title:'مستندسازی API', priority:'کم', status:'pending', plannedStart:null, plannedEnd:null, actualSec:0, subtasks:[] },
+      { id:9, categoryId:'work', title:'آماده‌سازی دمو', priority:'متوسط', status:'pending', plannedStart:'17:00', plannedEnd:'17:30', actualSec:0, subtasks:[] },
+
+      { id:10, categoryId:'sport', title:'باشگاه', priority:'متوسط', status:'done', plannedStart:'07:00', plannedEnd:'08:00', actualSec:60*60, subtasks:[] },
+      { id:11, categoryId:'sport', title:'کشش عضلات', priority:'کم', status:'done', plannedStart:null, plannedEnd:null, actualSec:30*60, subtasks:[] },
+
+      { id:12, categoryId:'nutrition', title:'صبحانه سالم', priority:'متوسط', status:'done', plannedStart:'08:15', plannedEnd:'08:30', actualSec:15*60, subtasks:[] },
+      { id:13, categoryId:'nutrition', title:'مصرف مکمل', priority:'کم', status:'done', plannedStart:null, plannedEnd:null, actualSec:5*60, subtasks:[] },
+      { id:14, categoryId:'nutrition', title:'نوشیدن آب کافی', priority:'کم', status:'done', plannedStart:null, plannedEnd:null, actualSec:0, subtasks:[] },
+      { id:15, categoryId:'nutrition', title:'تهیه لیست خرید هفتگی', priority:'متوسط', status:'pending', plannedStart:null, plannedEnd:null, actualSec:0, subtasks:[] },
+
+      { id:16, categoryId:'education', title:'مطالعه کتاب برنامه‌نویسی', priority:'متوسط', status:'done', plannedStart:'20:00', plannedEnd:'20:45', actualSec:45*60, subtasks:[{id:'16-1',title:'فصل ۴',done:true},{id:'16-2',title:'فصل ۵',done:true}] },
+      { id:17, categoryId:'education', title:'دوره آنلاین Vue', priority:'زیاد', status:'pending', plannedStart:'16:00', plannedEnd:'17:00', actualSec:0, subtasks:[] },
+      { id:18, categoryId:'education', title:'تمرین زبان انگلیسی', priority:'کم', status:'pending', plannedStart:null, plannedEnd:null, actualSec:0, subtasks:[] },
+
+      { id:19, categoryId:'life', title:'تماس با خانواده', priority:'متوسط', status:'done', plannedStart:'21:00', plannedEnd:'21:20', actualSec:20*60, subtasks:[] },
+      { id:20, categoryId:'life', title:'خرید روزانه', priority:'کم', status:'done', plannedStart:null, plannedEnd:null, actualSec:0, subtasks:[] },
+      { id:21, categoryId:'life', title:'پیاده‌روی عصرگاهی', priority:'متوسط', status:'pending', plannedStart:'19:00', plannedEnd:'19:30', actualSec:0, subtasks:[] }
+    ],
+    followUps: [
+      { id:1, title:'پیگیری پرداخت مشتری', person:'شرکت آریا', time:'۱۴:۰۰', status:'منتظر پیگیری' },
+      { id:2, title:'تماس با پزشک', person:'دکتر محمدی', time:'۱۰:۳۰', status:'انجام‌شده' },
+      { id:3, title:'پیگیری پاسخ همکار', person:'سارا احمدی', time:'—', status:'نیاز به پیگیری مجدد' }
+    ]
+  };
+
+  componentDidMount(){
+    this._tick = setInterval(()=>{ if(this.state.activeTimer && this.state.activeTimer.status==='running') this.setState({now:Date.now()}); }, 1000);
+    this._resize = ()=> this.setState({viewportWidth: window.innerWidth});
+    window.addEventListener('resize', this._resize);
+  }
+  componentWillUnmount(){ clearInterval(this._tick); window.removeEventListener('resize', this._resize); }
+
+  updateTask(id, patch){
+    this.setState(s=>({ tasks: s.tasks.map(t=> t.id===id? {...t, ...patch} : t) }));
+  }
+
+  toggleTaskDone(task){
+    if(task.status==='done'){
+      this.updateTask(task.id, {status:'pending'});
+    } else {
+      if(this.state.activeTimer && this.state.activeTimer.taskId===task.id) this.stopTimer(task.id, false);
+      this.updateTask(task.id, {status:'done'});
+    }
+  }
+
+  toggleSubtask(taskId, subId){
+    this.setState(s=>({ tasks: s.tasks.map(t=> t.id!==taskId? t : {...t, subtasks: t.subtasks.map(su=> su.id===subId? {...su, done:!su.done} : su)}) }));
+  }
+
+  reorderSubtask(taskId, fromId, toId){
+    if(fromId===toId) return;
+    this.setState(s=>({ tasks: s.tasks.map(t=>{
+      if(t.id!==taskId) return t;
+      const subs=[...t.subtasks];
+      const fromIdx = subs.findIndex(x=>x.id===fromId), toIdx = subs.findIndex(x=>x.id===toId);
+      if(fromIdx<0||toIdx<0) return t;
+      const [moved] = subs.splice(fromIdx,1);
+      subs.splice(toIdx,0,moved);
+      return {...t, subtasks:subs};
+    })}));
+  }
+
+  startTimer(taskId){
+    if(this.state.activeTimer && this.state.activeTimer.taskId!==taskId){
+      this.setState({timerConflictTaskId: taskId});
+      return;
+    }
+    this.setState({activeTimer:{taskId, startedAt:Date.now(), accumulatedSec:0, status:'running'}, now:Date.now()});
+    this.updateTask(taskId, {status:'in_progress'});
+  }
+  pauseTimer(){
+    const at = this.state.activeTimer; if(!at) return;
+    const elapsed = at.accumulatedSec + Math.floor((Date.now()-at.startedAt)/1000);
+    this.setState({activeTimer:{...at, accumulatedSec:elapsed, status:'paused'}});
+  }
+  resumeTimer(){
+    const at = this.state.activeTimer; if(!at) return;
+    this.setState({activeTimer:{...at, startedAt:Date.now(), status:'running'}});
+  }
+  stopTimer(taskId, markDone){
+    const at = this.state.activeTimer;
+    if(at && at.taskId===taskId){
+      const elapsed = at.accumulatedSec + (at.status==='running'? Math.floor((Date.now()-at.startedAt)/1000) : 0);
+      this.setState(s=>({ tasks: s.tasks.map(t=> t.id===taskId? {...t, actualSec:(t.actualSec||0)+elapsed, status: markDone===false? t.status : 'done'} : t), activeTimer:null }));
+    }
+  }
+
+  reorderTask(catId, fromId, toId){
+    if(fromId===toId) return;
+    this.setState(s=>{
+      const tasks=[...s.tasks];
+      const idxs = tasks.map((t,i)=>({t,i})).filter(x=>x.t.categoryId===catId).map(x=>x.i);
+      const sub = idxs.map(i=>tasks[i]);
+      const fromIdx = sub.findIndex(t=>t.id===fromId), toIdx = sub.findIndex(t=>t.id===toId);
+      if(fromIdx<0||toIdx<0) return {};
+      const [moved] = sub.splice(fromIdx,1);
+      sub.splice(toIdx,0,moved);
+      idxs.forEach((originalIndex,k)=> tasks[originalIndex]=sub[k]);
+      return {tasks};
+    });
+  }
+
+  addSubtaskTo(taskId, title){
+    const t = title.trim(); if(!t) return;
+    this.setState(s=>({
+      tasks: s.tasks.map(x=> x.id!==taskId? x : {...x, subtasks:[...x.subtasks, {id: taskId+'-'+Date.now(), title:t, done:false}]}),
+      newSubtaskDrafts: {...s.newSubtaskDrafts, [taskId]: ''}
+    }));
+  }
+
+  openTaskModal(categoryId){
+    this.setState({taskModal:{categoryId, title:'', description:'', plannedStart:'', plannedEnd:'', estimatedMin:'', priority:'متوسط', note:'', link:'', tags:'', newSubtask:'', subtasks:[]}});
+  }
+
+  toggleFollowUp(fu){
+    this.setState(s=>({ followUps: s.followUps.map(x=> x.id===fu.id? {...x, status: x.status==='انجام‌شده'? 'منتظر پیگیری':'انجام‌شده'} : x) }));
+  }
+
+  confirmSwitchTimer(){
+    const newId = this.state.timerConflictTaskId;
+    const at = this.state.activeTimer;
+    if(at){
+      const elapsed = at.accumulatedSec + (at.status==='running'? Math.floor((Date.now()-at.startedAt)/1000) : 0);
+      this.setState(s=>({ tasks: s.tasks.map(t=> t.id===at.taskId? {...t, actualSec:(t.actualSec||0)+elapsed} : t) }));
+    }
+    this.setState({activeTimer:{taskId:newId, startedAt:Date.now(), accumulatedSec:0, status:'running'}, timerConflictTaskId:null, now:Date.now()});
+    this.updateTask(newId, {status:'in_progress'});
+  }
+
+  renderVals(){
+    const s = this.state;
+    const isMobile = s.viewportWidth < 900;
+    const today = new Date(); today.setDate(today.getDate()+s.dateOffset);
+    const isoDate = today.toISOString().slice(0,10);
+    const persianDateLabel = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {day:'numeric', month:'long', year:'numeric'}).format(today);
+    const weekdayLabel = new Intl.DateTimeFormat('fa-IR', {weekday:'long'}).format(today);
+
+    const activeTimer = s.activeTimer;
+    const activeTask = activeTimer? s.tasks.find(t=>t.id===activeTimer.taskId) : null;
+    const liveElapsedSecFor = (task)=>{
+      if(!activeTimer || activeTimer.taskId!==task.id) return null;
+      const extra = activeTimer.status==='running'? Math.floor((s.now-activeTimer.startedAt)/1000) : 0;
+      return (task.actualSec||0) + activeTimer.accumulatedSec + extra;
+    };
+
+    const allTasks = s.tasks;
+    const doneCount = allTasks.filter(t=>t.status==='done').length;
+    const total = allTasks.length;
+    const remaining = allTasks.filter(t=>t.status!=='done' && t.status!=='cancelled').length;
+    const totalActualSec = allTasks.reduce((sum,t)=> sum + (t.actualSec||0) + (activeTimer && activeTimer.taskId===t.id? (activeTimer.accumulatedSec + (activeTimer.status==='running'? Math.floor((s.now-activeTimer.startedAt)/1000):0)) : 0), 0);
+    const percent = total? Math.round(doneCount/total*100) : 0;
+    const circumference = 2*Math.PI*42;
+
+    const priorityColors = {'کم':['#F0F2F6','#6B7280'],'متوسط':['#DBEAFE','#1D4ED8'],'زیاد':['#FFE4CC','#C2410C'],'فوری':['#FEE2E2','#DC2626']};
+
+    const buildTaskCard = (task, cat, idx) => {
+      const expanded = s.expandedTasks[task.id] !== undefined ? s.expandedTasks[task.id] : task.status!=='done';
+      const doneSubs = task.subtasks.filter(x=>x.done).length;
+      const isRunning = activeTimer && activeTimer.taskId===task.id && activeTimer.status==='running';
+      const isPaused = activeTimer && activeTimer.taskId===task.id && activeTimer.status==='paused';
+      const live = liveElapsedSecFor(task);
+      const [prioBg, prioColor] = priorityColors[task.priority] || priorityColors['متوسط'];
+      return {
+        id: task.id,
+        numberLabel: toPersianDigits(idx+1),
+        title: task.title,
+        done: task.status==='done',
+        opacity: task.status==='done'? '.6':'1',
+        anim: task.status==='done'? 'taskDone .35s ease':'none',
+        cardBg: isRunning? '#FFF9F2' : '#fff',
+        strike: task.status==='done'? 'line-through':'none',
+        titleColor: task.status==='done'? '#9AA3B2':'#1E2433',
+        checkBorder: task.status==='done'? cat.color : '#D7DBE4',
+        checkBg: task.status==='done'? cat.color : '#fff',
+        priorityLabel: task.priority, prioBg, prioColor,
+        timeLabel: task.plannedStart? (task.plannedStart+' - '+task.plannedEnd) : (task.actualSec? 'زمان آزاد':''),
+        subtaskLabel: task.subtasks.length? (doneSubs+' از '+task.subtasks.length+' زیروظیفه'):'',
+        expanded, expandLabel: task.subtasks.length? (expanded? 'بستن جزئیات':'جزئیات') : (expanded?'بستن':'جزئیات'),
+        toggleExpand: ()=> this.setState({expandedTasks:{...s.expandedTasks, [task.id]: !expanded}}),
+        newSubtaskValue: s.newSubtaskDrafts[task.id] || '',
+        onNewSubtaskChange: (e)=> this.setState(st=>({newSubtaskDrafts:{...st.newSubtaskDrafts, [task.id]: e.target.value}})),
+        onNewSubtaskKeyDown: (e)=> { if(e.key==='Enter') this.addSubtaskTo(task.id, e.target.value); },
+        onAddSubtaskClick: ()=> this.addSubtaskTo(task.id, s.newSubtaskDrafts[task.id] || ''),
+        onToggle: ()=> this.toggleTaskDone(task),
+        canStart: task.status!=='done' && !isRunning && !isPaused,
+        isRunning, isPaused,
+        liveElapsed: live!=null? fmtClock(live) : '',
+        pausedLabel: 'متوقف: '+fmtClock((task.actualSec||0)+ (activeTimer&&activeTimer.taskId===task.id? activeTimer.accumulatedSec:0)),
+        onStart: ()=> this.startTimer(task.id),
+        onPause: ()=> this.pauseTimer(),
+        onResume: ()=> this.resumeTimer(),
+        onStop: ()=> this.stopTimer(task.id, true),
+        accentColor: cat.color,
+        onDragStart: ()=> this.setState({draggedTask:{catId: cat.id, taskId: task.id}}),
+        onDragOver: (e)=> e && e.preventDefault && e.preventDefault(),
+        onDrop: ()=> { const d=this.state.draggedTask; if(d && d.catId===cat.id) this.reorderTask(cat.id, d.taskId, task.id); this.setState({draggedTask:null}); },
+        subtasks: task.subtasks.map(su=>({
+          id:su.id, title:su.title, done:su.done,
+          strike: su.done?'line-through':'none', color: su.done?'#9AA3B2':'#1E2433',
+          checkBorder: su.done? cat.color:'#D7DBE4', checkBg: su.done? cat.color:'#fff',
+          onToggle: ()=> this.toggleSubtask(task.id, su.id),
+          onDragStart: ()=> this.setState({draggedSub:{taskId:task.id, subId:su.id}}),
+          onDragOver: (e)=> e && e.preventDefault && e.preventDefault(),
+          onDrop: ()=> { const d=this.state.draggedSub; if(d && d.taskId===task.id) this.reorderSubtask(task.id, d.subId, su.id); this.setState({draggedSub:null}); }
+        }))
+      };
+    };
+
+    const categoryCards = s.categories.map(cat=>{
+      const catTasks = allTasks.filter(t=>t.categoryId===cat.id);
+      const catDone = catTasks.filter(t=>t.status==='done').length;
+      const catActualSec = catTasks.reduce((sum,t)=> sum + (t.actualSec||0) + (activeTimer && activeTimer.taskId===t.id? (activeTimer.accumulatedSec + (activeTimer.status==='running'? Math.floor((s.now-activeTimer.startedAt)/1000):0)):0), 0);
+      const pct = catTasks.length? Math.round(catDone/catTasks.length*100) : 0;
+      const collapsed = !!s.collapsedCategories[cat.id];
+      return {
+        id: cat.id, name: cat.name, color: cat.color, softBg: cat.soft, icon: cat.icon,
+        total: catTasks.length, doneCount: catDone, percentLabel: pct+'٪',
+        timeLabel: fmtMin(catActualSec/60),
+        expanded: !collapsed,
+        chevronRotate: collapsed? 'rotate(-90deg)':'rotate(0deg)',
+        toggleCollapse: ()=> this.setState(st=>({collapsedCategories:{...st.collapsedCategories, [cat.id]: !st.collapsedCategories[cat.id]}})),
+        onAddTask: ()=> this.openTaskModal(cat.id),
+        tasks: catTasks.map((t,idx)=>buildTaskCard(t, cat, idx))
+      };
+    });
+
+    const viewTabs = [
+      {key:'category', label:'دسته‌بندی'},
+      {key:'timeline', label:'Timeline'},
+      {key:'remaining', label:'باقی‌مانده'},
+      {key:'done', label:'انجام‌شده'}
+    ].map(v=>({
+      label:v.label,
+      onClick:()=> this.setState({viewMode:v.key}),
+      bg: s.viewMode===v.key? '#1E2433':'#fff',
+      color: s.viewMode===v.key? '#fff':'#4B5566',
+      border: s.viewMode===v.key? '#1E2433':'#E7EAF0'
+    }));
+
+    const HOUR_START=6, HOUR_END=22, PX_PER_HOUR=56;
+    const timelineHours = [];
+    for(let h=HOUR_START; h<=HOUR_END; h++){
+      timelineHours.push({label: String(h).padStart(2,'0')+':۰۰',
+        onDragOver:(e)=>e.preventDefault(),
+        onDrop:()=>{ const id=s.draggedTimelineTask; if(id!=null){ const t=allTasks.find(x=>x.id===id); if(t && t.plannedStart){ const dur=timeToMin(t.plannedEnd)-timeToMin(t.plannedStart); const ns=h*60; const ne=ns+dur; const pad=n=>String(n).padStart(2,'0'); this.updateTask(id,{plannedStart:pad(Math.floor(ns/60))+':'+pad(ns%60), plannedEnd:pad(Math.floor(ne/60))+':'+pad(ne%60)}); } this.setState({draggedTimelineTask:null}); } }
+      });
+    }
+    const scheduled = allTasks.filter(t=>t.plannedStart);
+    const timelineTasks = scheduled.map(t=>{
+      const cat = s.categories.find(c=>c.id===t.categoryId);
+      const startMin = timeToMin(t.plannedStart) - HOUR_START*60;
+      const endMin = timeToMin(t.plannedEnd) - HOUR_START*60;
+      return {
+        id:t.id, title:t.title, timeLabel: t.plannedStart+' - '+t.plannedEnd,
+        top: Math.max(0, startMin/60*PX_PER_HOUR), height: Math.max(24,(endMin-startMin)/60*PX_PER_HOUR - 4),
+        bg: cat.soft, border: cat.color, textColor: cat.color,
+        onDragStart: ()=> this.setState({draggedTimelineTask: t.id})
+      };
+    });
+    const unscheduled = allTasks.filter(t=>!t.plannedStart).map(t=>{
+      const cat = s.categories.find(c=>c.id===t.categoryId);
+      return {title:t.title, bg:cat.soft, textColor:cat.color};
+    });
+
+    const followUpStatusColors = {
+      'منتظر پیگیری': ['#FEF3C7','#B45309'],
+      'انجام‌شده': ['#DCFCE7','#15803D'],
+      'نیاز به پیگیری مجدد': ['#FEE2E2','#B91C1C'],
+      'پاسخ داده نشد': ['#F3F4F6','#6B7280'],
+      'لغوشده': ['#F3F4F6','#6B7280']
+    };
+    const followUpCards = s.followUps.map(fu=>{
+      const [bg,color] = followUpStatusColors[fu.status];
+      const done = fu.status==='انجام‌شده';
+      return {
+        title:fu.title, person:fu.person, time:fu.time, statusLabel:fu.status, statusBg:bg, statusColor:color, dotColor: color,
+        done, strike: done? 'line-through':'none', titleColor: done? '#9AA3B2':'#1E2433',
+        checkBorder: done? '#16A34A':'#D7DBE4', checkBg: done? '#16A34A':'#fff',
+        onToggle: ()=> this.toggleFollowUp(fu)
+      };
+    });
+
+    const totalPlannedMin = allTasks.reduce((sum,t)=> sum + (t.plannedStart? timeToMin(t.plannedEnd)-timeToMin(t.plannedStart):0), 0);
+    const diffMin = Math.round(totalActualSec/60 - totalPlannedMin);
+    const reportStats = [
+      {label:'کل وظایف', value: total, color:'#1E2433'},
+      {label:'انجام‌شده', value: doneCount, color:'#16A34A'},
+      {label:'باقی‌مانده', value: remaining, color:'#F97316'},
+      {label:'درصد تکمیل', value: percent+'٪', color:'#2563EB'},
+      {label:'زمان واقعی', value: fmtMin(totalActualSec/60), color:'#1E2433'},
+      {label:'اختلاف با برنامه', value: (diffMin>=0? '+':'')+diffMin+' دقیقه', color: diffMin>0? '#DC2626':'#16A34A'}
+    ];
+
+    const catTimeShares = categoryCards.map(c=>({name:c.name, color:c.color, sec: allTasks.filter(t=>t.categoryId===c.id).reduce((a,t)=>a+(t.actualSec||0),0)}));
+    const sumSec = catTimeShares.reduce((a,c)=>a+c.sec,0) || 1;
+    let acc=0;
+    const pieStops = catTimeShares.map(c=>{ const start=acc/sumSec*100; acc+=c.sec; const end=acc/sumSec*100; return c.color+' '+start+'% '+end+'%'; });
+    const pieGradient = 'conic-gradient(' + pieStops.join(',') + ')';
+
+    const barChart = s.categories.map(cat=>{
+      const catTasks = allTasks.filter(t=>t.categoryId===cat.id);
+      const planned = catTasks.reduce((sum,t)=> sum + (t.plannedStart? timeToMin(t.plannedEnd)-timeToMin(t.plannedStart):0),0);
+      const actual = catTasks.reduce((sum,t)=>sum+(t.actualSec||0),0)/60;
+      const maxV = Math.max(planned,actual,1);
+      return {name:cat.name, color:cat.color, plannedH: Math.round(planned/Math.max(maxV,120)*100), actualH: Math.round(actual/Math.max(maxV,120)*100)};
+    });
+
+    const review = s.review;
+
+    return {
+      notMobile: !isMobile, isMobile,
+      navItems: [
+        {label:'داشبورد', icon:NAV_ICONS.dashboard, bg:'transparent', color:'#C9CEDB', weight:500},
+        {label:'برنامه امروز', icon:NAV_ICONS.today, bg:'#232B40', color:'#fff', weight:700},
+        {label:'تقویم', icon:NAV_ICONS.calendar, bg:'transparent', color:'#C9CEDB', weight:500},
+        {label:'همه وظایف', icon:NAV_ICONS.list, bg:'transparent', color:'#C9CEDB', weight:500},
+        {label:'Backlog', icon:NAV_ICONS.backlog, bg:'transparent', color:'#C9CEDB', weight:500},
+        {label:'زنگ‌ها و پیگیری‌ها', icon:NAV_ICONS.followups, bg:'transparent', color:'#C9CEDB', weight:500},
+        {label:'گزارش‌ها', icon:NAV_ICONS.reports, bg:'transparent', color:'#C9CEDB', weight:500},
+        {label:'تنظیمات', icon:NAV_ICONS.settings, bg:'transparent', color:'#C9CEDB', weight:500}
+      ],
+      mobileNav: [
+        {label:'امروز', icon:NAV_ICONS.today, color:'#2563EB'},
+        {label:'تقویم', icon:NAV_ICONS.calendar, color:'#9AA3B2'},
+        {label:'افزودن', icon:'M12 4v16M4 12h16', color:'#9AA3B2'},
+        {label:'گزارش‌ها', icon:NAV_ICONS.reports, color:'#9AA3B2'},
+        {label:'تنظیمات', icon:NAV_ICONS.settings, color:'#9AA3B2'}
+      ],
+      weekdayLabel, persianDateLabel, isoDate,
+      goPrevDay: ()=> this.setState(st=>({dateOffset: st.dateOffset-1})),
+      goNextDay: ()=> this.setState(st=>({dateOffset: st.dateOffset+1})),
+      goToday: ()=> this.setState({dateOffset:0}),
+      todayBtnBg: s.dateOffset===0? '#EAF1FF':'#fff', todayBtnColor: s.dateOffset===0? '#2563EB':'#4B5566',
+      onDatePick: (e)=>{ const picked=new Date(e.target.value); const base=new Date(); base.setHours(0,0,0,0); picked.setHours(0,0,0,0); const diffDays=Math.round((picked-base)/86400000); this.setState({dateOffset:diffDays}); },
+      summary: { total, done: doneCount, remaining, percent, dashArray: (percent/100*circumference)+' '+circumference, actualLabel: fmtMinCompact(totalActualSec/60) },
+      activeTimerInfo: activeTask? {title: activeTask.title, elapsedLabel: fmtClock(liveElapsedSecFor(activeTask))} : false,
+      viewTabs,
+      isCategoryView: s.viewMode==='category' || s.viewMode==='remaining' || s.viewMode==='done',
+      isTimelineView: s.viewMode==='timeline',
+      categoryCards: (s.viewMode==='remaining'||s.viewMode==='done')? categoryCards.map(c=>({...c, tasks: c.tasks.filter(t=> s.viewMode==='done'? t.done : !t.done)})) : categoryCards,
+      timelineHours, timelineTasks, unscheduled,
+      followUps: s.followUps, followUpCards,
+      followUpQuickOpen: s.followUpQuickOpen,
+      onOpenFollowUpAdd: ()=> this.setState({followUpQuickOpen:true}),
+      followUpDraft: {
+        title: s.followUpDraft.title, onTitle:(e)=>this.setState({followUpDraft:{...s.followUpDraft, title:e.target.value}}),
+        person: s.followUpDraft.person, onPerson:(e)=>this.setState({followUpDraft:{...s.followUpDraft, person:e.target.value}}),
+        time: s.followUpDraft.time, onTime:(e)=>this.setState({followUpDraft:{...s.followUpDraft, time:e.target.value}})
+      },
+      onSubmitFollowUp: ()=> this._submitFollowUp(),
+      reportStats, pieGradient, barChart,
+      reviewSubmitted: s.reviewSubmitted, notReviewSubmitted: !s.reviewSubmitted,
+      review: {
+        achievement: review.achievement, onAchievement:(e)=>this.setState({review:{...review, achievement:e.target.value}}),
+        improvement: review.improvement, onImprovement:(e)=>this.setState({review:{...review, improvement:e.target.value}}),
+        satisfaction: review.satisfaction, onSatisfaction:(e)=>this.setState({review:{...review, satisfaction:+e.target.value}}),
+        energy: review.energy, onEnergy:(e)=>this.setState({review:{...review, energy:+e.target.value}}),
+        focus: review.focus, onFocus:(e)=>this.setState({review:{...review, focus:+e.target.value}})
+      },
+      onSubmitReview: ()=> this.setState({reviewSubmitted:true}),
+      taskModal: s.taskModal? {
+        title: s.taskModal.title, onTitle:(e)=>this.setState({taskModal:{...s.taskModal, title:e.target.value}}),
+        description: s.taskModal.description, onDescription:(e)=>this.setState({taskModal:{...s.taskModal, description:e.target.value}}),
+        plannedStart: s.taskModal.plannedStart, onPlannedStart:(e)=>this.setState({taskModal:{...s.taskModal, plannedStart:e.target.value}}),
+        plannedEnd: s.taskModal.plannedEnd, onPlannedEnd:(e)=>this.setState({taskModal:{...s.taskModal, plannedEnd:e.target.value}}),
+        estimatedMin: s.taskModal.estimatedMin, onEstimatedMin:(e)=>this.setState({taskModal:{...s.taskModal, estimatedMin:e.target.value}}),
+        priority: s.taskModal.priority, onPriority:(e)=>this.setState({taskModal:{...s.taskModal, priority:e.target.value}}),
+        note: s.taskModal.note, onNote:(e)=>this.setState({taskModal:{...s.taskModal, note:e.target.value}}),
+        link: s.taskModal.link, onLink:(e)=>this.setState({taskModal:{...s.taskModal, link:e.target.value}}),
+        tags: s.taskModal.tags, onTags:(e)=>this.setState({taskModal:{...s.taskModal, tags:e.target.value}}),
+        newSubtask: s.taskModal.newSubtask, onNewSubtask:(e)=>this.setState({taskModal:{...s.taskModal, newSubtask:e.target.value}}),
+        onNewSubtaskKeyDown: (e)=> { if(e.key==='Enter') this._addModalSubtask(); },
+        onAddSubtask: ()=> this._addModalSubtask(),
+        subtasks: s.taskModal.subtasks.map((ms,i)=>({title:ms, onRemove: ()=> this.setState(st=>({taskModal:{...st.taskModal, subtasks: st.taskModal.subtasks.filter((_,k)=>k!==i)}}))}))
+      } : false,
+      onCancelTaskModal: ()=> this.setState({taskModal:null}),
+      onSubmitTaskModal: ()=> this._submitTaskModal(),
+      timerConflict: s.timerConflictTaskId!=null? {currentTitle: activeTask? activeTask.title:''} : false,
+      onCancelConflict: ()=> this.setState({timerConflictTaskId:null}),
+      onSwitchTimer: ()=> this.confirmSwitchTimer()
+    };
+  }
+
+  _submitFollowUp(){
+    const d = this.state.followUpDraft;
+    if(!d.title.trim()){ this.setState({followUpQuickOpen:false}); return; }
+    const newId = Math.max(0,...this.state.followUps.map(f=>f.id))+1;
+    this.setState(s=>({
+      followUps:[...s.followUps, {id:newId, title:d.title, person:d.person||'—', time:d.time||'—', status:'منتظر پیگیری'}],
+      followUpQuickOpen:false, followUpDraft:{title:'',person:'',time:''}
+    }));
+  }
+
+  _addModalSubtask(){
+    const m = this.state.taskModal; if(!m) return;
+    const t = (m.newSubtask||'').trim(); if(!t) return;
+    this.setState({taskModal:{...m, subtasks:[...m.subtasks, t], newSubtask:''}});
+  }
+
+  _submitTaskModal(){
+    const m = this.state.taskModal; if(!m || !m.title.trim()) { this.setState({taskModal:null}); return; }
+    const newId = Math.max(0,...this.state.tasks.map(t=>t.id))+1;
+    this.setState(st=>({
+      tasks:[...st.tasks, {
+        id:newId, categoryId:m.categoryId, title:m.title.trim(), description:m.description||'',
+        priority:m.priority||'متوسط', status:'pending',
+        plannedStart: m.plannedStart||null, plannedEnd: m.plannedEnd||null,
+        estimatedMin: m.estimatedMin? +m.estimatedMin : null,
+        actualSec:0, note:m.note||'', link:m.link||'',
+        tags: (m.tags||'').split(',').map(x=>x.trim()).filter(Boolean),
+        subtasks: m.subtasks.map((title,i)=>({id:newId+'-'+i, title, done:false}))
+      }],
+      taskModal:null
+    }));
+  }
+}
+
+</script>
+</body>
+</html>
