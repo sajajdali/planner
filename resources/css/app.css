@@ -46,6 +46,41 @@ button.request-loading::after {
     animation: request-spin .7s linear infinite;
 }
 
+.request-deleting {
+    position: relative !important;
+    overflow: hidden;
+    pointer-events: none !important;
+    opacity: .68;
+    filter: grayscale(.25) saturate(.75);
+    transform: scale(.985);
+    transition: opacity .18s ease, transform .18s ease, filter .18s ease;
+}
+
+.request-deleting::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255, 255, 255, .72), rgba(254, 226, 226, .72));
+    backdrop-filter: blur(1px);
+}
+
+.request-deleting::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 41;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    border: 3px solid rgba(153, 27, 27, .24);
+    border-top-color: #dc2626;
+    border-radius: 50%;
+    animation: request-spin .7s linear infinite;
+}
+
 @keyframes request-spin {
     to {
         transform: rotate(360deg);
