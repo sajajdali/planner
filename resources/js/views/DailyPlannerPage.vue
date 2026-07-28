@@ -107,7 +107,9 @@ const modalSubtasks = ref<SubtaskDraft[]>([]);
 const modalSubtaskDraft = ref({ title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' });
 const modalSubtasksOpen = ref(false);
 const editingModalSubtaskIndex = ref<number | null>(null);
+const modalSubtaskFormRef = ref<HTMLElement | null>(null);
 const taskGroupSearch = ref('');
+const taskGroupPickerOpen = ref(false);
 const inlineSubtasks = ref<Record<number, { title: string; planned_start_time: string; planned_end_time: string; priority: string }>>({});
 const inlineSubtaskOpen = ref<Record<number, boolean>>({});
 const draggedTaskId = ref<number | null>(null);
@@ -216,6 +218,10 @@ const filteredSelectedCategoryGroups = computed(() => {
     const filtered = selectedCategoryGroups.value.filter((group) => group.name.toLowerCase().includes(query));
     const selected = selectedCategoryGroups.value.find((group) => String(group.id) === newTask.value.task_group_id);
     return selected && !filtered.some((group) => group.id === selected.id) ? [selected, ...filtered] : filtered;
+});
+const selectedTaskGroupLabel = computed(() => {
+    if (!newTask.value.task_group_id) return 'بدون گروه‌بندی';
+    return selectedCategoryGroups.value.find((group) => String(group.id) === newTask.value.task_group_id)?.name ?? 'بدون گروه‌بندی';
 });
 const tableFilteredCategories = computed(() => {
     if (!tableCategoryFilter.value) return categories.value;
@@ -949,6 +955,7 @@ function openTaskModal(categoryId: number) {
     modalSubtasksOpen.value = false;
     editingModalSubtaskIndex.value = null;
     taskGroupSearch.value = '';
+    taskGroupPickerOpen.value = false;
     categoryPickerModal.value = false;
     taskModal.value = true;
 }
@@ -977,6 +984,7 @@ function openEditTaskModal(task: Task) {
     modalSubtasksOpen.value = Boolean(modalSubtasks.value.length);
     editingModalSubtaskIndex.value = null;
     taskGroupSearch.value = '';
+    taskGroupPickerOpen.value = false;
     categoryPickerModal.value = false;
     taskModal.value = true;
 }
@@ -991,6 +999,7 @@ function closeTaskModal() {
     modalSubtasksOpen.value = false;
     editingModalSubtaskIndex.value = null;
     taskGroupSearch.value = '';
+    taskGroupPickerOpen.value = false;
 }
 
 function openDescriptionModal(task: Task) {
@@ -1046,6 +1055,12 @@ function openCategoryPicker() {
     categoryPickerModal.value = true;
 }
 
+function selectTaskGroup(groupId: string) {
+    newTask.value.task_group_id = groupId;
+    taskGroupSearch.value = '';
+    taskGroupPickerOpen.value = false;
+}
+
 function addModalSubtask() {
     const title = modalSubtaskDraft.value.title.trim();
     if (!title) return;
@@ -1075,7 +1090,7 @@ function removeModalSubtask(index: number) {
     }
 }
 
-function editModalSubtask(index: number) {
+async function editModalSubtask(index: number) {
     const subtask = modalSubtasks.value[index];
     if (!subtask) return;
     editingModalSubtaskIndex.value = index;
@@ -1086,6 +1101,8 @@ function editModalSubtask(index: number) {
         priority: subtask.priority || 'medium',
     };
     modalSubtasksOpen.value = true;
+    await nextTick();
+    modalSubtaskFormRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function modalSubtaskMeta(subtask: SubtaskDraft) {
@@ -1601,6 +1618,7 @@ watch(tableCategoryFilter, () => {
 watch(selectedCategory, () => {
     if (!taskModal.value) return;
     taskGroupSearch.value = '';
+    taskGroupPickerOpen.value = false;
     if (!selectedCategoryGroups.value.some((group) => String(group.id) === newTask.value.task_group_id)) {
         newTask.value.task_group_id = '';
     }
@@ -2557,12 +2575,16 @@ onUnmounted(() => {
                     <option v-for="category in categories" :key="`task-modal-category-${category.id}`" :value="category.id">{{ category.name }}</option>
                 </select>
                 <div v-if="selectedCategoryGroups.length" class="task-group-picker">
-                    <input v-if="selectedCategoryGroups.length > 6" v-model="taskGroupSearch" class="task-group-search" placeholder="جستجوی گروه‌بندی..." />
-                    <select v-model="newTask.task_group_id" class="task-group-select">
-                        <option value="">بدون گروه‌بندی</option>
-                        <option v-for="group in filteredSelectedCategoryGroups" :key="`task-modal-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
-                    </select>
-                    <small v-if="taskGroupSearch && !filteredSelectedCategoryGroups.length">گروهی با این نام پیدا نشد.</small>
+                    <button type="button" class="task-group-select" :class="{ open: taskGroupPickerOpen }" @click="taskGroupPickerOpen = !taskGroupPickerOpen">
+                        <span>{{ selectedTaskGroupLabel }}</span>
+                        <i></i>
+                    </button>
+                    <div v-if="taskGroupPickerOpen" class="task-group-dropdown">
+                        <input v-model="taskGroupSearch" class="task-group-search" placeholder="جستجوی گروه‌بندی..." />
+                        <button type="button" :class="{ active: !newTask.task_group_id }" @click="selectTaskGroup('')">بدون گروه‌بندی</button>
+                        <button v-for="group in filteredSelectedCategoryGroups" :key="`task-modal-group-${group.id}`" type="button" :class="{ active: newTask.task_group_id === String(group.id) }" @click="selectTaskGroup(String(group.id))">{{ group.name }}</button>
+                        <small v-if="taskGroupSearch && !filteredSelectedCategoryGroups.length">گروهی با این نام پیدا نشد.</small>
+                    </div>
                 </div>
                 <textarea v-model="newTask.description" placeholder="توضیح کوتاه..." />
                 <div class="two-cols">
@@ -2570,18 +2592,19 @@ onUnmounted(() => {
                     <span class="time-input modal-time-input"><input v-model="newTask.planned_end_time" type="time" aria-label="ساعت پایان" /><b>پایان</b></span>
                 </div>
                 <div class="two-cols"><input v-model="newTask.estimated_minutes" type="number" placeholder="مدت تخمینی" /><select v-model="newTask.priority"><option v-for="priority in priorities" :key="`task-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option></select></div>
-                <div class="modal-subtasks" :class="{ 'mobile-open': modalSubtasksOpen || modalSubtasks.length }">
+                <div class="modal-subtasks" :class="{ 'mobile-open': modalSubtasksOpen }">
                     <div class="modal-subtasks-head">
                         <label>زیروظیفه‌ها</label>
                         <button type="button" class="modal-subtask-toggle" @click="modalSubtasksOpen = !modalSubtasksOpen">
-                            <i>{{ modalSubtasksOpen || modalSubtasks.length ? '×' : '+' }}</i>
-                            <span>{{ modalSubtasksOpen || modalSubtasks.length ? 'بستن' : 'زیر وظیفه' }}</span>
+                            <i>{{ modalSubtasksOpen ? '×' : '+' }}</i>
+                            <span>{{ modalSubtasksOpen ? 'بستن' : 'زیر وظیفه' }}</span>
                         </button>
                     </div>
                     <div
                         v-for="(subtask, index) in modalSubtasks"
                         :key="`${subtask.title}-${index}`"
                         class="modal-subtask-item"
+                        :class="{ editing: editingModalSubtaskIndex === index, dimmed: editingModalSubtaskIndex !== null && editingModalSubtaskIndex !== index }"
                         draggable="true"
                         @dragstart="draggedModalSubtaskIndex = index"
                         @dragover.prevent
@@ -2594,6 +2617,7 @@ onUnmounted(() => {
                             <button type="button" class="modal-subtask-edit" title="ویرایش زیروظیفه" aria-label="ویرایش زیروظیفه" @click="editModalSubtask(index)">
                                 <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg>
                             </button>
+                            <mark v-if="editingModalSubtaskIndex === index">در حال ویرایش</mark>
                         </span>
                         <small>{{ modalSubtaskMeta(subtask) }}</small>
                         <div class="modal-subtask-move">
@@ -2602,7 +2626,7 @@ onUnmounted(() => {
                         </div>
                         <button type="button" class="modal-subtask-remove" @click="removeModalSubtask(index)">×</button>
                     </div>
-                    <div v-if="modalSubtasksOpen || modalSubtasks.length" class="modal-subtask-add">
+                    <div v-if="modalSubtasksOpen" ref="modalSubtaskFormRef" class="modal-subtask-add">
                         <input v-model="modalSubtaskDraft.title" class="subtask-title-input" placeholder="عنوان زیروظیفه" @keydown.enter.prevent="addModalSubtask" />
                         <div class="subtask-meta-row">
                             <label>

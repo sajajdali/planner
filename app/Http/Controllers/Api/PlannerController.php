@@ -1249,7 +1249,14 @@ class PlannerController extends Controller
             'completed_at' => $done ? now() : null,
         ]);
 
-        return $this->taskPayload($task->load(['subtasks', 'timeSessions']));
+        if (! $task->parent_id) {
+            $task->subtasks()->update([
+                'status' => $done ? 'done' : 'pending',
+                'completed_at' => $done ? now() : null,
+            ]);
+        }
+
+        return $this->taskPayload($task->fresh()->load(['subtasks', 'timeSessions']));
     }
 
     public function referTask(Request $request, Task $task)
