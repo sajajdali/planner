@@ -338,7 +338,7 @@ async function undoPayment(payment: ObligationPayment) {
                         <i aria-hidden="true">
                             <svg viewBox="0 0 24 24"><path d="M12 8v5"></path><path d="M12 17h.01"></path><path d="M10.3 4.2 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"></path></svg>
                         </i>
-                        <div>
+                        <div class="debt-empty-copy">
                             <b>بدهی فعالی ثبت نشده</b>
                             <span>وقتی بدهی جدید ثبت شود، عنوان، طرف حساب، مانده و وضعیت پرداخت همین‌جا نمایش داده می‌شود.</span>
                         </div>
@@ -538,19 +538,25 @@ async function undoPayment(payment: ObligationPayment) {
         line-height:1.9!important;
     }
     .installment-empty b::before{
-        content:'';
+        content:'◷';
         width:34px;
         height:34px;
         margin-bottom:8px;
+        display:grid;
+        place-items:center;
         border:2px solid #3a2e1f;
         border-radius:12px;
         background:linear-gradient(135deg,#f5f3ff,#fff);
+        color:#7c3aed;
+        font-size:18px;
+        font-weight:900;
         box-shadow:2px 2px 0 rgba(58,46,31,.75);
     }
     .finance-empty-card.debt-empty{
         display:grid!important;
         grid-template-columns:1fr!important;
-        place-items:center!important;
+        justify-items:stretch!important;
+        align-items:center!important;
         gap:10px!important;
         min-height:184px!important;
         padding:18px 16px!important;
@@ -561,6 +567,7 @@ async function undoPayment(payment: ObligationPayment) {
         box-shadow:2px 2px 0 rgba(58,46,31,.12)!important;
     }
     .finance-empty-card.debt-empty>i{
+        justify-self:center!important;
         width:46px!important;
         height:46px!important;
         border-width:2px!important;
@@ -568,13 +575,28 @@ async function undoPayment(payment: ObligationPayment) {
         box-shadow:2px 2px 0 #3a2e1f!important;
     }
     .finance-empty-card.debt-empty>i svg{width:24px!important;height:24px!important}
-    .finance-empty-card.debt-empty>div{display:grid!important;gap:4px!important;justify-items:center!important}
+    .finance-empty-card.debt-empty>.debt-empty-copy{
+        display:grid!important;
+        grid-template-columns:1fr!important;
+        gap:5px!important;
+        justify-items:center!important;
+        width:100%!important;
+        max-width:100%!important;
+        min-width:0!important;
+        text-align:center!important;
+    }
     .finance-empty-card.debt-empty b{
+        display:block!important;
+        width:100%!important;
+        max-width:100%!important;
         font-size:20px!important;
         line-height:1.45!important;
         text-align:center!important;
+        white-space:normal!important;
+        overflow-wrap:normal!important;
     }
     .finance-empty-card.debt-empty span{
+        display:block!important;
         max-width:260px!important;
         margin:0 auto!important;
         font-size:10.5px!important;
@@ -582,6 +604,7 @@ async function undoPayment(payment: ObligationPayment) {
         text-align:center!important;
     }
     .finance-empty-card.debt-empty button{
+        justify-self:center!important;
         width:min(220px,100%)!important;
         height:38px!important;
         font-size:16px!important;
