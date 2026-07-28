@@ -1875,11 +1875,10 @@ onUnmounted(() => {
                                                 <td><button v-if="!isReferred(task)" class="refer-icon table-refer" title="ارجاع به روز دیگر" aria-label="ارجاع به روز دیگر" @click="openReferModal(task)"><svg viewBox="0 0 24 24"><path d="M7 17L17 7"></path><path d="M10 7h7v7"></path></svg></button><small v-else class="refer-text-badge">ارجاع شد</small></td>
                                             </tr>
                                             <tr v-if="task.subtasks.length" class="table-subtasks-row">
-                                                <td></td>
-                                                <td colspan="6">
+                                                <td colspan="7">
                                                     <div class="table-subtasks">
                                                         <button
-                                                            v-for="subtask in task.subtasks"
+                                                            v-for="(subtask, subtaskIndex) in task.subtasks"
                                                             :key="`table-subtask-${subtask.id}`"
                                                             :id="`subtask-${subtask.id}`"
                                                             class="table-subtask"
@@ -1887,6 +1886,7 @@ onUnmounted(() => {
                                                             @click="toggleSubtask(subtask)"
                                                         >
                                                             <span class="table-subtask-check"></span>
+                                                            <b class="table-subtask-number">{{ fa(subtaskIndex + 1) }}</b>
                                                             <strong>{{ subtask.title }}</strong>
                                                             <small>{{ subtask.planned_start_time ? `${subtask.planned_start_time} تا ${subtask.planned_end_time || '--:--'}` : 'بدون زمان' }}</small>
                                                             <em class="priority-pill" :style="priorityStyle(subtask.priority)">{{ priorityLabel(subtask.priority) }}</em>
