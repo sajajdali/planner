@@ -1710,11 +1710,11 @@ onUnmounted(() => {
                         <div class="routine-times">
                             <label>
                                 بیداری
-                                <input v-model="routineDraft.wake_time" type="time" @change="saveRoutineTimes" />
+                                <span class="time-input"><input v-model="routineDraft.wake_time" type="time" @change="saveRoutineTimes" /></span>
                             </label>
                             <label>
                                 خواب
-                                <input v-model="routineDraft.sleep_time" type="time" @change="saveRoutineTimes" />
+                                <span class="time-input"><input v-model="routineDraft.sleep_time" type="time" @change="saveRoutineTimes" /></span>
                             </label>
                         </div>
 
@@ -2026,8 +2026,8 @@ onUnmounted(() => {
                                     </button>
                                     <div v-if="task.status !== 'done' && inlineSubtaskOpen[task.id]" class="inline-subtask subtask-area">
                                         <input v-model="inlineSubtasks[task.id].title" placeholder="زیروظیفه جدید..." @keyup.enter="createInlineSubtask(task)" />
-                                        <input v-model="inlineSubtasks[task.id].planned_start_time" type="time" title="شروع" />
-                                        <input v-model="inlineSubtasks[task.id].planned_end_time" type="time" title="پایان" />
+                                        <span class="time-input"><input v-model="inlineSubtasks[task.id].planned_start_time" type="time" title="شروع" /></span>
+                                        <span class="time-input"><input v-model="inlineSubtasks[task.id].planned_end_time" type="time" title="پایان" /></span>
                                         <select v-model="inlineSubtasks[task.id].priority" title="اولویت">
                                             <option v-for="priority in priorities" :key="`inline-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option>
                                         </select>
@@ -2074,8 +2074,8 @@ onUnmounted(() => {
                                 <div class="mini-head"><strong>تسک‌های تغذیه</strong><span>{{ fa(nutritionTasks.length) }} مورد</span></div>
                                 <div class="nutrition-task-form">
                                     <input v-model="newNutritionTask.title" placeholder="تسک تغذیه جدید..." @keyup.enter="createNutritionTask" />
-                                    <input v-model="newNutritionTask.planned_start_time" type="time" title="شروع" />
-                                    <input v-model="newNutritionTask.planned_end_time" type="time" title="پایان" />
+                                    <span class="time-input"><input v-model="newNutritionTask.planned_start_time" type="time" title="شروع" /></span>
+                                    <span class="time-input"><input v-model="newNutritionTask.planned_end_time" type="time" title="پایان" /></span>
                                     <select v-model="newNutritionTask.priority" title="اولویت">
                                         <option v-for="priority in priorities" :key="`nutrition-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option>
                                     </select>
@@ -2106,7 +2106,7 @@ onUnmounted(() => {
                                 <div class="mini-head"><strong>وعده‌های غذایی</strong><span>{{ fa(mealSummary.eaten) }} خورده شده</span></div>
                                 <div class="meal-form">
                                     <input v-model="newMeal.title" placeholder="مثلاً: سالاد مرغ" @keyup.enter="createMeal" />
-                                    <input v-model="newMeal.meal_time" type="time" />
+                                    <span class="time-input"><input v-model="newMeal.meal_time" type="time" title="ساعت وعده" /></span>
                                     <select v-model="newMeal.meal_type">
                                         <option value="breakfast">صبحانه</option>
                                         <option value="lunch">ناهار</option>
@@ -2139,7 +2139,7 @@ onUnmounted(() => {
                                     </div>
                                     <div v-else class="meal-edit-grid">
                                         <input v-model="mealDrafts[meal.id].title" placeholder="عنوان وعده" @keyup.enter="updateMeal(meal)" />
-                                        <input v-model="mealDrafts[meal.id].meal_time" type="time" @change="updateMeal(meal)" />
+                                        <span class="time-input"><input v-model="mealDrafts[meal.id].meal_time" type="time" @change="updateMeal(meal)" /></span>
                                         <select v-model="mealDrafts[meal.id].meal_type" @change="updateMeal(meal)">
                                             <option value="breakfast">صبحانه</option>
                                             <option value="lunch">ناهار</option>
@@ -2176,7 +2176,7 @@ onUnmounted(() => {
                         <div class="quick-row">
                             <input v-model="followTitle" placeholder="عنوان پیگیری..." />
                             <input v-model="followPerson" placeholder="شخص/موضوع" />
-                            <input v-model="followTime" type="time" title="ساعت پیگیری" />
+                            <span class="time-input"><input v-model="followTime" type="time" title="ساعت پیگیری" /></span>
                             <button @click="createFollowUp">افزودن</button>
                         </div>
                         <div v-for="followUp in followUps" :id="`follow-${followUp.id}`" :key="followUp.id" class="follow-item" :class="{ done: followUp.status === 'done' }">
@@ -2185,7 +2185,7 @@ onUnmounted(() => {
                             <div v-else class="follow-edit-grid">
                                 <input v-model="followDrafts[followUp.id].title" placeholder="عنوان" @keyup.enter="updateFollowUp(followUp)" />
                                 <input v-model="followDrafts[followUp.id].person_name" placeholder="شخص/موضوع" @keyup.enter="updateFollowUp(followUp)" />
-                                <input v-model="followDrafts[followUp.id].follow_up_time" type="time" @change="updateFollowUp(followUp)" />
+                                <span class="time-input"><input v-model="followDrafts[followUp.id].follow_up_time" type="time" @change="updateFollowUp(followUp)" /></span>
                                 <button class="micro-icon save" title="ذخیره پیگیری" aria-label="ذخیره پیگیری" @click="updateFollowUp(followUp)">
                                     <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>
                                 </button>
@@ -2496,7 +2496,7 @@ onUnmounted(() => {
                     <option v-for="group in selectedCategoryGroups" :key="`task-modal-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
                 </select>
                 <textarea v-model="newTask.description" placeholder="توضیح کوتاه..." />
-                <div class="two-cols"><input v-model="newTask.planned_start_time" type="time" /><input v-model="newTask.planned_end_time" type="time" /></div>
+                <div class="two-cols"><span class="time-input"><input v-model="newTask.planned_start_time" type="time" /></span><span class="time-input"><input v-model="newTask.planned_end_time" type="time" /></span></div>
                 <div class="two-cols"><input v-model="newTask.estimated_minutes" type="number" placeholder="مدت تخمینی" /><select v-model="newTask.priority"><option v-for="priority in priorities" :key="`task-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option></select></div>
                 <div class="modal-subtasks" :class="{ 'mobile-open': modalSubtasksOpen || modalSubtasks.length }">
                     <div class="modal-subtasks-head">
@@ -2530,11 +2530,11 @@ onUnmounted(() => {
                         <div class="subtask-meta-row">
                             <label>
                                 شروع
-                                <input v-model="modalSubtaskDraft.planned_start_time" type="time" />
+                                <span class="time-input"><input v-model="modalSubtaskDraft.planned_start_time" type="time" /></span>
                             </label>
                             <label>
                                 پایان
-                                <input v-model="modalSubtaskDraft.planned_end_time" type="time" />
+                                <span class="time-input"><input v-model="modalSubtaskDraft.planned_end_time" type="time" /></span>
                             </label>
                             <label>
                                 اولویت
