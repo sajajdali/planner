@@ -512,4 +512,101 @@ async function undoPayment(payment: ObligationPayment) {
     .finance-date-picker .picker-grid button{height:36px!important;min-height:36px!important}.finance-date-picker .picker-grid strong{font-size:12px}
     .finance-empty-card.debt-empty{grid-template-columns:34px minmax(0,1fr);gap:9px;padding:12px 10px;border-radius:14px}.finance-empty-card.debt-empty>i{width:34px;height:34px;border-width:2px;border-radius:11px}.finance-empty-card.debt-empty>i svg{width:19px;height:19px}.finance-empty-card.debt-empty b{font-size:18px}.finance-empty-card.debt-empty span{font-size:10px;line-height:1.75}.finance-empty-card.debt-empty button{grid-column:1/-1;height:36px;font-size:16px}
 }
+@media(max-width:560px){
+    .installment-empty{
+        display:grid!important;
+        grid-template-columns:1fr!important;
+        gap:6px!important;
+        min-height:118px!important;
+        padding:16px 14px!important;
+        border:2px dashed #dccca4!important;
+        border-radius:18px!important;
+        background:rgba(255,255,255,.72)!important;
+        box-shadow:2px 2px 0 rgba(58,46,31,.12)!important;
+        text-align:center!important;
+    }
+    .installment-empty span{display:none!important}
+    .installment-empty b{
+        min-height:0!important;
+        display:grid!important;
+        place-items:center!important;
+        padding:10px 8px!important;
+        border:0!important;
+        background:transparent!important;
+        color:#8a7a5b!important;
+        font-size:12px!important;
+        line-height:1.9!important;
+    }
+    .installment-empty b::before{
+        content:'';
+        width:34px;
+        height:34px;
+        margin-bottom:8px;
+        border:2px solid #3a2e1f;
+        border-radius:12px;
+        background:linear-gradient(135deg,#f5f3ff,#fff);
+        box-shadow:2px 2px 0 rgba(58,46,31,.75);
+    }
+    .finance-empty-card.debt-empty{
+        display:grid!important;
+        grid-template-columns:1fr!important;
+        place-items:center!important;
+        gap:10px!important;
+        min-height:184px!important;
+        padding:18px 16px!important;
+        text-align:center!important;
+        border:2px dashed #dccca4!important;
+        border-radius:18px!important;
+        background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,247,237,.72))!important;
+        box-shadow:2px 2px 0 rgba(58,46,31,.12)!important;
+    }
+    .finance-empty-card.debt-empty>i{
+        width:46px!important;
+        height:46px!important;
+        border-width:2px!important;
+        border-radius:16px!important;
+        box-shadow:2px 2px 0 #3a2e1f!important;
+    }
+    .finance-empty-card.debt-empty>i svg{width:24px!important;height:24px!important}
+    .finance-empty-card.debt-empty>div{display:grid!important;gap:4px!important;justify-items:center!important}
+    .finance-empty-card.debt-empty b{
+        font-size:20px!important;
+        line-height:1.45!important;
+        text-align:center!important;
+    }
+    .finance-empty-card.debt-empty span{
+        max-width:260px!important;
+        margin:0 auto!important;
+        font-size:10.5px!important;
+        line-height:1.9!important;
+        text-align:center!important;
+    }
+    .finance-empty-card.debt-empty button{
+        width:min(220px,100%)!important;
+        height:38px!important;
+        font-size:16px!important;
+        border-radius:12px!important;
+    }
+    .tx-summary{
+        margin:0 0 10px!important;
+        padding:10px 12px!important;
+        border:1.5px dashed #eadfbe!important;
+        border-radius:13px!important;
+        background:rgba(255,255,255,.58)!important;
+        text-align:center!important;
+        font-size:10.5px!important;
+        line-height:1.9!important;
+    }
+    .finance-empty-card.tx-empty{
+        display:grid!important;
+        grid-template-columns:34px minmax(0,1fr)!important;
+        align-items:center!important;
+        min-height:70px!important;
+        padding:11px 12px!important;
+        text-align:right!important;
+    }
+    .finance-empty-card.tx-empty>i{width:34px!important;height:34px!important;border-radius:11px!important}
+    .finance-empty-card.tx-empty b{font-size:12px!important}
+    .finance-empty-card.tx-empty span{font-size:9.5px!important;line-height:1.7!important}
+}
 </style>
