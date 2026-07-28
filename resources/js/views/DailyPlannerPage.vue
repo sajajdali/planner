@@ -2090,8 +2090,8 @@ onUnmounted(() => {
                                 <div class="mini-head"><strong>تسک‌های تغذیه</strong><span>{{ fa(nutritionTasks.length) }} مورد</span></div>
                                 <div class="nutrition-task-form">
                                     <input v-model="newNutritionTask.title" placeholder="تسک تغذیه جدید..." @keyup.enter="createNutritionTask" />
-                                    <span class="time-input nutrition-time-input"><input v-model="newNutritionTask.planned_start_time" type="time" title="شروع" aria-label="ساعت شروع تسک تغذیه" /></span>
-                                    <span class="time-input nutrition-time-input"><input v-model="newNutritionTask.planned_end_time" type="time" title="پایان" aria-label="ساعت پایان تسک تغذیه" /></span>
+                                    <span class="time-input nutrition-time-input labeled-time-input"><small>شروع</small><input v-model="newNutritionTask.planned_start_time" type="time" title="شروع" aria-label="ساعت شروع تسک تغذیه" /></span>
+                                    <span class="time-input nutrition-time-input labeled-time-input"><small>پایان</small><input v-model="newNutritionTask.planned_end_time" type="time" title="پایان" aria-label="ساعت پایان تسک تغذیه" /></span>
                                     <select v-model="newNutritionTask.priority" title="اولویت">
                                         <option v-for="priority in priorities" :key="`nutrition-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option>
                                     </select>
@@ -2122,7 +2122,7 @@ onUnmounted(() => {
                                 <div class="mini-head"><strong>وعده‌های غذایی</strong><span>{{ fa(mealSummary.eaten) }} خورده شده</span></div>
                                 <div class="meal-form">
                                     <input v-model="newMeal.title" placeholder="مثلاً: سالاد مرغ" @keyup.enter="createMeal" />
-                                    <span class="time-input"><input v-model="newMeal.meal_time" type="time" title="ساعت وعده" /></span>
+                                    <span class="time-input meal-time-input labeled-time-input"><small>ساعت وعده</small><input v-model="newMeal.meal_time" type="time" title="ساعت وعده" aria-label="ساعت وعده غذایی" /></span>
                                     <select v-model="newMeal.meal_type">
                                         <option value="breakfast">صبحانه</option>
                                         <option value="lunch">ناهار</option>
@@ -2155,7 +2155,7 @@ onUnmounted(() => {
                                     </div>
                                     <div v-else class="meal-edit-grid">
                                         <input v-model="mealDrafts[meal.id].title" placeholder="عنوان وعده" @keyup.enter="updateMeal(meal)" />
-                                        <span class="time-input"><input v-model="mealDrafts[meal.id].meal_time" type="time" @change="updateMeal(meal)" /></span>
+                                        <span class="time-input meal-time-input labeled-time-input"><small>ساعت وعده</small><input v-model="mealDrafts[meal.id].meal_time" type="time" aria-label="ساعت وعده غذایی" @change="updateMeal(meal)" /></span>
                                         <select v-model="mealDrafts[meal.id].meal_type" @change="updateMeal(meal)">
                                             <option value="breakfast">صبحانه</option>
                                             <option value="lunch">ناهار</option>

@@ -5497,6 +5497,24 @@ body {
     opacity: 0;
 }
 
+.labeled-time-input small {
+    position: absolute;
+    right: 12px;
+    top: 5px;
+    z-index: 2;
+    color: #8a7a5d;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.labeled-time-input input[type='time'] {
+    padding-top: 13px !important;
+    padding-inline-start: 40px !important;
+    padding-inline-end: 12px !important;
+}
+
 .modal-time-input > input[type='time'] {
     height: 100%;
     min-height: 62px;
@@ -8853,12 +8871,26 @@ body {
     }
 
     .nutrition-task-form .nutrition-time-input {
-        grid-column: 1 / -1;
+        grid-column: auto;
         min-width: 0;
         width: 100%;
     }
 
     .nutrition-time-input input[type='time'] {
+        width: 100%;
+        min-width: 0;
+        height: 46px;
+    }
+
+    .meal-form .meal-time-input,
+    .meal-edit-grid .meal-time-input {
+        grid-column: auto;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .meal-form .meal-time-input input[type='time'],
+    .meal-edit-grid .meal-time-input input[type='time'] {
         width: 100%;
         min-width: 0;
         height: 46px;
