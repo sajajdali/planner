@@ -425,7 +425,7 @@ async function undoPayment(payment: ObligationPayment) {
 
         <div v-if="datePicker" class="finance-modal-backdrop date-picker-backdrop"><section class="finance-modal finance-date-picker">
             <header><h2>{{ monthNames[datePicker.jm - 1] }} {{ fa(datePicker.jy) }}</h2><button @click="datePicker = null">×</button></header>
-            <div class="month-nav picker-nav">
+            <div class="picker-nav">
                 <button class="cyan" @click="shiftDatePicker(-1)">‹</button>
                 <button class="yellow" @click="shiftDatePicker(1)">›</button>
             </div>
@@ -451,4 +451,65 @@ async function undoPayment(payment: ObligationPayment) {
 @media(max-width:560px){.finance-actions{display:flex!important;align-items:center!important;width:100%!important;max-width:100%!important;min-height:46px!important;padding:0!important;gap:7px!important;box-sizing:border-box!important;direction:ltr!important;overflow:visible!important}.finance-actions :deep(.app-menu-wrap){order:1!important;flex:0 0 46px!important;width:46px!important;margin:0 auto 0 -8px!important;position:relative!important;left:auto!important;right:auto!important;top:auto!important;direction:rtl!important}.finance-actions :deep(.shared-menu-button){width:44px!important;height:44px!important}.finance-actions .dashboard-link{order:2!important;flex:0 0 90px!important;width:90px!important;min-width:0!important;height:44px!important;padding:0 6px!important;font-size:14px!important;line-height:1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;direction:rtl!important}.finance-actions .green{order:3!important;flex:0 0 126px!important;width:126px!important;min-width:0!important;height:44px!important;padding:0 6px!important;font-size:15px!important;line-height:1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;direction:rtl!important}}
 .finance-empty-card.debt-empty{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;min-height:132px;margin-bottom:28px;padding:20px 22px;border:2px dashed #dccca4;border-radius:20px;background:linear-gradient(135deg,rgba(255,255,255,.88),rgba(255,247,237,.78));box-shadow:4px 4px 0 rgba(58,46,31,.13);text-align:right;color:#7a6a4f}.finance-empty-card.debt-empty>i{width:58px;height:58px;border-width:3px;border-radius:18px;background:#fee2e2;color:#dc2626;box-shadow:3px 3px 0 #3a2e1f}.finance-empty-card.debt-empty>i svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}.finance-empty-card.debt-empty>div{min-width:0;display:grid;gap:4px}.finance-empty-card.debt-empty b{font-family:Lalezar,Vazirmatn,sans-serif;font-size:25px;font-weight:400;line-height:1.35;color:#3a2e1f}.finance-empty-card.debt-empty span{max-width:690px;margin:0;font-size:13px;font-weight:900;line-height:2;color:#8a7a5b}.finance-empty-card.debt-empty button{height:42px;min-width:104px;border:2px solid #3a2e1f;border-radius:13px;background:#ff6fa5;color:#fff;box-shadow:3px 3px 0 #3a2e1f;padding:0 16px;font-family:Lalezar,Vazirmatn,sans-serif;font-size:20px;font-weight:400;white-space:nowrap}.finance-empty-card.debt-empty button:hover{transform:translateY(-1px)}
 @media(max-width:700px){.finance-empty-card.debt-empty{grid-template-columns:auto minmax(0,1fr);gap:11px;padding:16px 14px;min-height:0;border-radius:17px}.finance-empty-card.debt-empty>i{width:48px;height:48px;border-radius:15px}.finance-empty-card.debt-empty>i svg{width:25px;height:25px}.finance-empty-card.debt-empty b{font-size:22px}.finance-empty-card.debt-empty span{font-size:12px;line-height:1.9}.finance-empty-card.debt-empty button{grid-column:1/-1;width:100%;height:40px;font-size:19px}}
+
+@media(max-width:560px){
+    .finance-shell{padding:10px 6px 34px;background:#241b2f}
+    .finance-page{padding:20px 12px 24px;border-radius:8px;background-size:16px 16px;box-shadow:0 18px 36px rgba(0,0,0,.42)}
+    .tape{height:22px;width:78px;top:-10px}.tape.yellow{right:34px}.tape.cyan{left:42px}
+    .finance-header{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:8px;text-align:center}
+    .finance-header h1{font-size:24px;line-height:1.25}.finance-header p{font-size:10.5px;line-height:1.7}
+    .finance-actions{display:grid!important;grid-template-columns:42px minmax(0,1fr) minmax(0,1.08fr)!important;gap:7px!important;min-height:40px!important;direction:ltr!important}
+    .finance-actions :deep(.app-menu-wrap){grid-column:1!important;order:unset!important;flex:none!important;width:42px!important;margin:0!important;justify-self:start!important}
+    .finance-actions :deep(.shared-menu-button){width:40px!important;height:40px!important;border-width:2px!important;border-radius:12px!important}
+    .finance-actions .dashboard-link,.finance-actions .green{height:40px!important;width:100%!important;flex:none!important;padding:0 6px!important;border-width:2px!important;border-radius:10px!important;font-size:12.5px!important;line-height:1!important}
+    .finance-actions .dashboard-link{grid-column:2!important}.finance-actions .green{grid-column:3!important}
+    .month-nav{display:grid!important;grid-template-columns:38px minmax(0,1fr) 38px 74px!important;gap:6px!important;margin:14px 0!important;direction:ltr!important}
+    .month-nav button,.month-nav strong{height:34px!important;min-width:0!important;width:100%!important;padding:0 4px!important;border-width:2px!important;border-radius:9px!important;font-size:13px!important;box-shadow:1.5px 1.5px 0 #3a2e1f!important;direction:rtl!important}
+    .month-nav strong{font-size:14px!important}.month-nav .pink{grid-column:4!important;grid-row:1!important;min-width:0!important;font-size:12px!important}
+    .finance-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin-bottom:20px!important}
+    .finance-stats article{min-height:76px;padding:10px!important;border-width:2px;border-radius:12px;box-shadow:2px 2px 0 #3a2e1f}
+    .finance-stats span{font-size:9.5px}.finance-stats b{font-size:13px;line-height:1.65;margin-top:5px;overflow-wrap:anywhere}
+    .section-title{gap:6px;margin-bottom:8px}.section-title i{width:4px;height:17px}.section-title b{font-size:18px;line-height:1.35}
+    .account-cards{grid-template-columns:1fr!important;gap:9px!important;margin-bottom:22px!important}
+    .account-cards article{min-height:88px;padding:12px 13px;border-radius:13px;box-shadow:2px 2px 0 #3a2e1f}
+    .account-cards i{width:26px;height:26px;border-radius:8px}.account-cards small{top:11px;left:12px;font-size:9px}
+    .account-cards span{font-size:12px}.account-cards b{font-size:13px;line-height:1.7}.account-cards>button{min-height:64px;border-radius:12px;font-size:12px}
+    .finance-block-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:18px 0 9px!important}
+    .finance-block-head button{height:34px;padding:0 10px;font-size:11px;border-radius:9px;white-space:nowrap}
+    .installment-list,.debt-list{gap:9px;margin-bottom:20px}
+    .installment-list article{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;padding:10px!important;border-radius:12px;box-shadow:2px 2px 0 #3a2e1f}
+    .installment-list i{width:30px;height:30px;border-radius:9px}.installment-list div{min-width:0}
+    .installment-list strong{font-size:12px;line-height:1.6}.installment-list em{font-size:8.5px;padding:1px 6px}
+    .installment-list span,.payment-foot{font-size:9.5px!important;line-height:1.8}.installment-list aside{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;text-align:right;gap:8px}
+    .installment-list aside b{font-size:12px}.installment-list aside button{height:30px;margin:0;padding:0 10px;font-size:10.5px}
+    .debt-list article{padding:10px;border-radius:12px;box-shadow:2px 2px 0 #3a2e1f}
+    .debt-list header,.debt-list div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+    .debt-list header span{font-size:12px;min-width:0}.debt-list header b{font-size:12px;white-space:nowrap}
+    .debt-list div span{font-size:9.5px;line-height:1.8}.debt-list button{height:30px;padding:0 10px;font-size:10.5px}
+    .tx-summary{font-size:10px;line-height:1.8;margin-bottom:8px}
+    .tx-grid{grid-template-columns:1fr!important;gap:10px!important}
+    .tx-grid>div{padding:9px;border-radius:13px}.tx-grid h3{height:32px;margin-bottom:8px;padding:0 10px;font-size:17px;border-radius:10px}
+    .tx-grid article,.modal-tx{gap:7px;padding:8px 9px;border-radius:10px;box-shadow:1.5px 1.5px 0 #3a2e1f}
+    .tx-grid article>span,.modal-tx span{font-size:10.5px;min-width:0}.tx-grid small,.modal-tx small{font-size:8.8px;line-height:1.6}.tx-grid article>b,.modal-tx b{font-size:10.5px;white-space:nowrap}
+    .finance-empty-card{min-height:58px;padding:10px;gap:9px;border-radius:12px}.finance-empty-card>i{width:30px;height:30px;border-radius:10px}.finance-empty-card b{font-size:12px}.finance-empty-card span{font-size:9.5px;line-height:1.7}
+    .finance-calendar{margin-top:12px;padding:10px;border-radius:13px;box-shadow:2px 2px 0 #3a2e1f;overflow:hidden}
+    .calendar-stats{grid-template-columns:1fr!important;gap:6px;margin-bottom:10px}.calendar-stats b{padding:7px;font-size:11px;border-radius:9px}
+    .weekdays,.calendar-grid{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:3px!important}
+    .weekdays span{font-size:9px}.calendar-grid button{min-height:38px!important;height:38px;padding:3px 2px!important;border-width:1.5px;border-radius:8px;align-items:center!important;justify-content:center!important;gap:1px!important;overflow:hidden}
+    .calendar-grid strong{font-size:11px;line-height:1}.calendar-grid span,.calendar-grid em{font-size:7.5px;line-height:1.15;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .finance-empty-table{grid-template-columns:repeat(2,1fr);border-radius:12px}.finance-empty-table span{padding:8px;font-size:9px}.finance-empty-table b{min-height:54px;font-size:11px}
+    .finance-modal-backdrop{z-index:9000;align-items:end;place-items:end center;padding:8px 6px 0}
+    .finance-modal{width:100%!important;max-width:100%!important;max-height:min(88dvh,680px)!important;padding:14px 12px calc(12px + env(safe-area-inset-bottom))!important;border-radius:20px 20px 0 0!important;border-width:2px!important;gap:9px!important;box-shadow:0 -3px 0 #3a2e1f,0 -16px 36px rgba(20,14,10,.32)!important}
+    .finance-modal header{top:-14px!important;margin:-14px -12px 0!important;padding:12px 12px 8px!important;border-radius:18px 18px 0 0!important}
+    .finance-modal h2{font-size:20px!important;line-height:1.35}.finance-modal header button{width:34px!important;height:34px!important;border-radius:11px!important;font-size:19px!important}
+    .finance-modal input,.finance-modal select,.finance-date-field{height:44px!important;min-height:44px!important;border-width:2px!important;border-radius:12px!important;padding:0 11px!important;font-size:14px!important}
+    .finance-date-field span{font-size:12.5px!important}.finance-date-field i{font-size:17px!important}
+    .seg{gap:7px}.seg button{height:42px!important;border-width:2px!important;border-radius:12px!important;font-size:18px!important}
+    .finance-modal .submit{height:48px!important;min-height:48px!important;border-width:2px!important;border-radius:13px!important;font-size:19px!important;box-shadow:2px 2px 0 #3a2e1f!important}
+    .day-totals{gap:6px}.day-totals span{padding:7px;font-size:10.5px}
+    .payment-summary{gap:3px;padding:9px 10px}.payment-summary strong{font-size:17px}.payment-summary span{font-size:11.5px}
+    .finance-date-picker{max-height:min(78dvh,560px)!important}.finance-date-picker .picker-nav{display:flex!important;align-items:center!important;justify-content:center!important;gap:10px!important;margin:0 0 8px!important;direction:rtl!important}.finance-date-picker .picker-nav button{width:42px!important;height:36px!important;min-width:42px!important;padding:0!important;border-width:2px!important;border-radius:10px!important;font-size:18px!important;box-shadow:1.5px 1.5px 0 #3a2e1f!important;display:grid!important;place-items:center!important}
+    .finance-date-picker .picker-grid button{height:36px!important;min-height:36px!important}.finance-date-picker .picker-grid strong{font-size:12px}
+    .finance-empty-card.debt-empty{grid-template-columns:34px minmax(0,1fr);gap:9px;padding:12px 10px;border-radius:14px}.finance-empty-card.debt-empty>i{width:34px;height:34px;border-width:2px;border-radius:11px}.finance-empty-card.debt-empty>i svg{width:19px;height:19px}.finance-empty-card.debt-empty b{font-size:18px}.finance-empty-card.debt-empty span{font-size:10px;line-height:1.75}.finance-empty-card.debt-empty button{grid-column:1/-1;height:36px;font-size:16px}
+}
 </style>
