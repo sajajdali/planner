@@ -122,6 +122,7 @@ const noteSaving = ref(false);
 const noteSaved = ref(false);
 const drawerRef = ref<HTMLElement | null>(null);
 const reviewSubmitted = ref(false);
+const savedReviewScore = ref<number | null>(null);
 const viewMode = ref<'notebook' | 'table' | 'trello'>('notebook');
 const viewMenuOpen = ref(false);
 const tableStatusFilter = ref<'all' | 'pending' | 'done'>('all');
@@ -235,11 +236,13 @@ const dayScore = computed(() => {
     return Math.max(0, Math.min(100, Math.round(completionScore + timeScore + mealScore - remainingPenalty)));
 });
 const dayGrade = computed(() => {
-    if (dayScore.value >= 90) return 'عالی';
-    if (dayScore.value >= 75) return 'خیلی خوب';
-    if (dayScore.value >= 55) return 'قابل قبول';
+    const score = reviewSubmitted.value && savedReviewScore.value !== null ? savedReviewScore.value : dayScore.value;
+    if (score >= 90) return 'عالی';
+    if (score >= 75) return 'خیلی خوب';
+    if (score >= 55) return 'قابل قبول';
     return 'نیاز به بهتر شدن';
 });
+const reviewScore = computed(() => reviewSubmitted.value && savedReviewScore.value !== null ? savedReviewScore.value : dayScore.value);
 const currentMinutes = computed(() => {
     const now = new Date(nowTick.value);
     return now.getHours() * 60 + now.getMinutes();
@@ -781,8 +784,11 @@ async function loadPlanner() {
             energy_score: data.review.energy_score ?? 7,
             focus_score: data.review.focus_score ?? 7,
         };
-        reviewSubmitted.value = Boolean(data.review.achievement || data.review.improvement_note);
+        savedReviewScore.value = Number(data.review.completion_percentage ?? dayScore.value);
+        reviewSubmitted.value = true;
     } else {
+        review.value = { achievement: '', improvement_note: '', satisfaction_score: 7, energy_score: 7, focus_score: 7 };
+        savedReviewScore.value = null;
         reviewSubmitted.value = false;
     }
     loading.value = false;
@@ -1526,6 +1532,7 @@ async function submitReview() {
         energy_score: data.energy_score ?? 7,
         focus_score: data.focus_score ?? 7,
     };
+    savedReviewScore.value = Number(data.completion_percentage ?? dayScore.value);
     reviewSubmitted.value = true;
 }
 
@@ -2402,9 +2409,9 @@ onUnmounted(() => {
                         </div>
 
                         <div v-if="reviewSubmitted" class="review-done">
-                            <div class="review-ring" :style="{ '--p': `${dayScore * 3.6}deg` }"><span>{{ fa(dayScore) }}</span></div>
+                            <div class="review-ring" :style="{ '--p': `${reviewScore * 3.6}deg` }"><span>{{ fa(reviewScore) }}</span></div>
                             <div>
-                                <strong>امتیاز کامل امروز: {{ fa(dayScore) }} از ۱۰۰ - {{ dayGrade }}</strong>
+                                <strong>امتیاز کامل امروز: {{ fa(reviewScore) }} از ۱۰۰ - {{ dayGrade }}</strong>
                                 <span>{{ fa(summary.done) }} تسک انجام شده، {{ fa(summary.remaining) }} تسک مانده، {{ fa(mealSummary.eaten) }} وعده خورده شده.</span>
                             </div>
                         </div>

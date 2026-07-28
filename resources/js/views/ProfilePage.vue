@@ -15,6 +15,8 @@ const avatarFile = ref<File | null>(null);
 const avatarPreview = ref<string | null>(null);
 const saved = ref(false);
 const error = ref('');
+const avatarProcessing = ref(false);
+const avatarStatus = ref('');
 
 const avatarUrl = computed(() => avatarPreview.value || auth.user?.avatar_url || null);
 const initials = computed(() => (name.value.trim().slice(0, 1) || 'ر'));
@@ -31,24 +33,84 @@ function chooseAvatar() {
     fileInput.value?.click();
 }
 
-function onAvatarChange(event: Event) {
+async function onAvatarChange(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     error.value = '';
+    avatarStatus.value = '';
 
     if (!file) return;
     if (!file.type.startsWith('image/')) {
         error.value = 'فقط فایل تصویر قابل قبول است.';
+        input.value = '';
         return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-        error.value = 'حجم عکس باید کمتر از ۲ مگابایت باشد.';
-        return;
+    avatarProcessing.value = true;
+    avatarStatus.value = file.size > 900 * 1024 ? 'در حال کم‌کردن حجم عکس...' : 'در حال آماده‌سازی عکس...';
+
+    try {
+        const optimized = await optimizeAvatar(file);
+        avatarFile.value = optimized;
+        if (avatarPreview.value?.startsWith('blob:')) URL.revokeObjectURL(avatarPreview.value);
+        avatarPreview.value = URL.createObjectURL(optimized);
+        avatarStatus.value = optimized.size < file.size
+            ? `حجم عکس کم شد و آماده آپلود است.`
+            : 'عکس آماده آپلود است.';
+    } catch {
+        error.value = 'آماده‌سازی عکس انجام نشد. لطفاً یک تصویر دیگر انتخاب کن.';
+    } finally {
+        avatarProcessing.value = false;
+        input.value = '';
+    }
+}
+
+function loadImage(file: File) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(image);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Image load failed'));
+        };
+        image.src = url;
+    });
+}
+
+async function optimizeAvatar(file: File) {
+    const targetSize = 900 * 1024;
+    const maxSide = 1200;
+    if (file.size <= targetSize && !file.type.includes('png')) return file;
+
+    const image = await loadImage(file);
+    const ratio = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is not supported');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    for (const quality of [0.82, 0.74, 0.66, 0.58]) {
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (!blob) continue;
+        if (blob.size <= targetSize || quality === 0.58) {
+            return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'avatar'}.jpg`, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+            });
+        }
     }
 
-    avatarFile.value = file;
-    avatarPreview.value = URL.createObjectURL(file);
+    return file;
 }
 
 async function saveProfile() {
@@ -61,6 +123,7 @@ async function saveProfile() {
     }
 
     try {
+        avatarStatus.value = avatarFile.value ? 'در حال آپلود عکس...' : 'در حال ذخیره پروفایل...';
         await auth.updateProfile({
             name: name.value.trim(),
             email: email.value.trim(),
@@ -71,8 +134,10 @@ async function saveProfile() {
         avatarFile.value = null;
         avatarPreview.value = null;
         saved.value = true;
-    } catch {
-        error.value = 'ذخیره پروفایل انجام نشد. عکس یا اطلاعات را بررسی کن.';
+        avatarStatus.value = '';
+    } catch (exception: any) {
+        error.value = exception?.response?.data?.message || 'ذخیره پروفایل انجام نشد. عکس یا اطلاعات را بررسی کن.';
+        avatarStatus.value = '';
     }
 }
 
@@ -102,11 +167,11 @@ async function logout() {
 
             <div class="profile-body">
                 <aside class="profile-showcase">
-                    <button type="button" class="avatar-safe-zone" @click="chooseAvatar">
+                    <button type="button" class="avatar-safe-zone" :class="{ loading: avatarProcessing || auth.loading }" :disabled="avatarProcessing || auth.loading" @click="chooseAvatar">
                         <span class="avatar-guide">عکس پروفایل</span>
                         <img v-if="avatarUrl" :src="avatarUrl" alt="تصویر پروفایل" />
                         <strong v-else>{{ emoji || initials }}</strong>
-                        <small>برای تغییر عکس بزن</small>
+                        <small>{{ avatarProcessing ? 'در حال آماده‌سازی...' : auth.loading ? 'در حال آپلود...' : 'برای تغییر عکس بزن' }}</small>
                     </button>
                     <div class="profile-id-card">
                         <strong>{{ name || 'نام شما' }}</strong>
@@ -145,11 +210,12 @@ async function logout() {
                         </i>
                     </div>
 
+                    <p v-if="avatarStatus" class="profile-upload-status">{{ avatarStatus }}</p>
                     <p v-if="error" class="form-error">{{ error }}</p>
                     <p v-if="saved" class="profile-success">پروفایل ذخیره شد.</p>
 
-                    <button type="submit" :disabled="auth.loading">
-                        {{ auth.loading ? 'در حال ذخیره...' : 'ذخیره پروفایل' }}
+                    <button type="submit" :disabled="auth.loading || avatarProcessing">
+                        {{ avatarProcessing ? 'در حال آماده‌سازی عکس...' : auth.loading ? 'در حال آپلود و ذخیره...' : 'ذخیره پروفایل' }}
                     </button>
                 </form>
             </div>

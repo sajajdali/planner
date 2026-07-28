@@ -189,7 +189,7 @@ class AuthController extends Controller
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
             'phone' => ['nullable', 'regex:/^09\d{9}$/', 'unique:users,phone,'.$request->user()->id],
             'profile_emoji' => ['nullable', 'string', 'max:12'],
-            'avatar' => ['nullable', 'image', 'max:2048'],
+            'avatar' => ['nullable', 'image', 'max:5120'],
         ]);
 
         $user = $request->user();

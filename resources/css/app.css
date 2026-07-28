@@ -596,6 +596,31 @@ textarea { resize: vertical; min-height: 76px; }
     font-weight: 900;
 }
 
+.avatar-safe-zone.loading {
+    cursor: wait;
+}
+
+.avatar-safe-zone.loading::after {
+    content: "";
+    position: absolute;
+    inset: 14px;
+    border-radius: 18px;
+    background: rgba(255, 251, 240, .72);
+    border: 2px dashed rgba(58, 46, 31, .28);
+}
+
+.avatar-safe-zone.loading::before {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    width: 42px;
+    height: 42px;
+    border: 4px solid rgba(36, 198, 182, .25);
+    border-top-color: #24c6b6;
+    border-radius: 50%;
+    animation: request-spin .8s linear infinite;
+}
+
 .avatar-guide {
     color: #0f766e;
 }
@@ -672,6 +697,17 @@ textarea { resize: vertical; min-height: 76px; }
     margin: 0;
     color: #16a34a;
     font-size: 13px;
+    font-weight: 900;
+}
+
+.profile-upload-status {
+    margin: 0;
+    padding: 9px 12px;
+    border: 1.5px solid #bdeee8;
+    border-radius: 12px;
+    background: #ecfdf5;
+    color: #0f766e;
+    font-size: 12px;
     font-weight: 900;
 }
 
@@ -3761,6 +3797,16 @@ body {
 
 .date-actions button:nth-child(3) {
     background: #22d3d0;
+}
+
+.date-actions .jalali-picker .persian-date-input {
+    height: 28px;
+    min-height: 28px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
 }
 
 .summary-grid {
@@ -8176,6 +8222,32 @@ body {
         grid-template-columns: 1fr;
     }
 
+    .report-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .report-stats div {
+        min-height: 82px;
+        padding: 10px 12px;
+        align-content: center;
+    }
+
+    .finance-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .finance-summary-grid div {
+        min-height: 82px;
+        padding: 10px 12px;
+        align-content: center;
+    }
+
+    .finance-summary-grid div:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
+
     .pie-row {
         align-items: flex-start;
     }
@@ -8803,7 +8875,17 @@ body {
 
     .cat-time span {
         min-height: 24px;
+        height: 24px;
+        align-items: center;
+        line-height: 1;
         overflow: hidden;
+    }
+
+    .cat-time b,
+    .cat-time strong {
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
     }
 
     .add-btn {
