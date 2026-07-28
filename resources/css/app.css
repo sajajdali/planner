@@ -4104,6 +4104,60 @@ body {
     padding-top: 14px;
 }
 
+.category-empty-add {
+    --empty-add-color: #3a2e1f;
+    --empty-add-soft: #ffd93d;
+    justify-self: center;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 24px;
+    margin: 2px 0 0;
+    padding: 3px 5px;
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--empty-add-color) 72%, #3a2e1f);
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.category-empty-add.separated {
+    width: min(220px, 68%);
+    margin-top: 4px;
+    padding-top: 9px;
+    border-top: 1.5px dashed rgba(58, 46, 31, .16);
+}
+
+.category-empty-add i {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid color-mix(in srgb, var(--empty-add-color) 72%, #3a2e1f);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--empty-add-color) 18%, #fff);
+    box-shadow: 1px 1px 0 color-mix(in srgb, var(--empty-add-color) 72%, #3a2e1f);
+    color: color-mix(in srgb, var(--empty-add-color) 82%, #3a2e1f);
+    font-style: normal;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.category-empty-add:hover i {
+    transform: translateY(-1px);
+}
+
+.category-empty-add span {
+    color: color-mix(in srgb, var(--empty-add-color) 72%, #3a2e1f);
+    font-size: 10.5px;
+    font-weight: 800;
+}
+
 .task-card {
     border: 2px solid #3a2e1f;
     border-right-width: 2px;
@@ -5369,6 +5423,17 @@ body {
     border: 2px dashed #3a2e1f;
 }
 
+.follow-quick-row {
+    grid-template-columns: minmax(220px, 1.8fr) minmax(170px, 1fr) minmax(132px, auto) minmax(92px, auto);
+    align-items: center;
+}
+
+.follow-quick-row button {
+    min-width: 92px;
+    height: 44px;
+    padding-inline: 14px;
+}
+
 .quick-row input,
 .quick-row select,
 .modal-card input,
@@ -5394,41 +5459,93 @@ body {
 .time-input::before {
     content: "";
     position: absolute;
-    inset-inline-start: 10px;
+    left: 12px;
     top: 50%;
-    width: 15px;
-    height: 15px;
-    border: 2px solid #7a6a4f;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #6f6047;
     border-radius: 999px;
     transform: translateY(-50%);
     pointer-events: none;
     z-index: 1;
+    box-sizing: border-box;
 }
 
 .time-input::after {
     content: "";
     position: absolute;
-    inset-inline-start: 17px;
+    left: 19px;
     top: 50%;
     width: 5px;
-    height: 6px;
-    border-inline-start: 2px solid #7a6a4f;
-    border-bottom: 2px solid #7a6a4f;
-    transform: translateY(-72%);
-    transform-origin: bottom;
+    height: 5px;
+    border-left: 2px solid #6f6047;
+    border-bottom: 2px solid #6f6047;
+    transform: translate(-1px, -5px);
     pointer-events: none;
     z-index: 1;
+    box-sizing: border-box;
 }
 
 .time-input input[type='time'] {
     width: 100%;
     direction: ltr;
     text-align: center;
-    padding-inline: 34px 10px !important;
+    padding-inline: 38px 12px !important;
 }
 
 .time-input input[type='time']::-webkit-calendar-picker-indicator {
     opacity: 0;
+}
+
+.modal-time-input > input[type='time'] {
+    height: 100%;
+    min-height: 62px;
+    padding-inline: 42px 56px !important;
+    text-align: left;
+}
+
+.modal-time-input::before {
+    background: #fffdf5;
+    box-shadow: 0 0 0 4px rgba(255, 217, 61, .16);
+    z-index: 2;
+}
+
+.modal-time-input::after {
+    background: transparent;
+    border-color: #5d513c;
+    z-index: 2;
+}
+
+.modal-time-input input[type='time'] {
+    color: #2e281f;
+    font-weight: 800;
+}
+
+.modal-time-input input[type='time']::-webkit-datetime-edit {
+    color: #2e281f;
+}
+
+.modal-time-input input[type='time']::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+}
+
+.modal-time-input input[type='time']::-webkit-datetime-edit-text,
+.modal-time-input input[type='time']::-webkit-datetime-edit-hour-field,
+.modal-time-input input[type='time']::-webkit-datetime-edit-minute-field {
+    color: #2e281f;
+}
+
+.modal-time-input b {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    z-index: 2;
+    transform: translateY(-50%);
+    color: #807762;
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
 }
 
 .follow-item {
@@ -5469,7 +5586,7 @@ body {
 
 .follow-edit-grid {
     display: grid !important;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 86px 24px;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(126px, .45fr) 30px;
     align-items: center;
     gap: 6px !important;
     min-width: 0;
@@ -5485,6 +5602,37 @@ body {
     padding: 0 8px;
     font-size: 11px;
     font-weight: 800;
+}
+
+.follow-time-input {
+    min-width: 126px;
+}
+
+.follow-time-input::before {
+    left: 14px;
+    width: 18px;
+    height: 18px;
+    border-color: #6f6047;
+}
+
+.follow-time-input::after {
+    left: 22px;
+    width: 5px;
+    height: 6px;
+}
+
+.follow-time-input input[type='time'] {
+    min-width: 112px;
+    height: 40px;
+    border: 1.5px solid #eadfbe;
+    border-radius: 12px;
+    background: #fffbf0;
+    color: #3a2e1f;
+    font-size: 13px;
+    font-weight: 900;
+    padding-inline: 42px 14px !important;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .expense-card {
@@ -5648,6 +5796,12 @@ body {
     font-size: clamp(11px, 1.9vw, 14px);
     line-height: 1.45;
     text-align: left;
+}
+
+.finance-mini-totals strong b,
+.finance-mini-totals strong em {
+    font: inherit;
+    font-style: normal;
 }
 
 .expense-circle-btn:hover {
@@ -6363,13 +6517,15 @@ body {
 
 .nutrition-task-form {
     display: grid;
-    grid-template-columns: 1.2fr .65fr .65fr .8fr auto;
+    grid-template-columns: minmax(180px, 1.2fr) minmax(112px, .65fr) minmax(112px, .65fr) minmax(112px, .8fr) auto;
     gap: 7px;
     margin-bottom: 10px;
     padding: 9px;
     border: 1.5px dashed #86efac;
     border-radius: 12px;
     background: #f0fdf4;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .nutrition-task-form input,
@@ -6386,7 +6542,7 @@ body {
 }
 
 .nutrition-task-form button {
-    height: 34px;
+    height: 40px;
     border: 1.5px solid #3a2e1f;
     border-radius: 10px;
     background: #22c55e;
@@ -6394,6 +6550,37 @@ body {
     padding: 0 12px;
     font-weight: 900;
     white-space: nowrap;
+}
+
+.nutrition-time-input {
+    min-width: 112px;
+}
+
+.nutrition-time-input::before {
+    left: 14px;
+    width: 18px;
+    height: 18px;
+    border-color: #6f6047;
+}
+
+.nutrition-time-input::after {
+    left: 22px;
+    width: 5px;
+    height: 6px;
+}
+
+.nutrition-time-input input[type='time'] {
+    min-width: 112px;
+    height: 40px;
+    border: 1.5px solid #bbf7d0;
+    border-radius: 12px;
+    background: #fff;
+    color: #3a2e1f;
+    font-size: 13px;
+    font-weight: 900;
+    padding-inline: 42px 14px !important;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .nutrition-task-list {
@@ -6435,6 +6622,26 @@ body {
 .meal-item.eaten {
     background: #dcfce7;
     border-color: #22c55e;
+}
+
+.nutrition-task.done {
+    opacity: .58;
+    background: #e8f8ee;
+    border-color: #86efac;
+    box-shadow: none;
+}
+
+.nutrition-task.done .nutrition-task-number,
+.nutrition-task.done .check-btn {
+    opacity: .82;
+}
+
+.nutrition-task.done strong,
+.nutrition-task.done span {
+    color: #6b7a68;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(34, 197, 94, .48);
 }
 
 .nutrition-task div,
@@ -6981,6 +7188,55 @@ body {
     .due-alert-head > span,
     .due-alert-list button {
         animation: none;
+    }
+}
+
+@media (max-width: 980px) {
+    .follow-quick-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .follow-quick-row input:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .follow-quick-row .follow-time-input {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .follow-quick-row .follow-time-input input[type='time'] {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .follow-quick-row button {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .nutrition-task-form {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .nutrition-task-form input:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .nutrition-task-form .nutrition-time-input,
+    .nutrition-task-form select {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .nutrition-task-form .nutrition-time-input input[type='time'] {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .nutrition-task-form button {
+        grid-column: 1 / -1;
+        width: 100%;
     }
 }
 
@@ -8440,6 +8696,48 @@ body {
         grid-column: 1 / -1;
     }
 
+    .finance-mini-totals {
+        gap: 10px;
+    }
+
+    .finance-mini-totals div {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 104px;
+        padding: 12px 14px 10px;
+        text-align: center;
+    }
+
+    .finance-mini-totals span {
+        justify-self: center;
+        font-size: 13px;
+        line-height: 1.2;
+    }
+
+    .finance-mini-totals strong {
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        width: 100%;
+        min-width: 0;
+        text-align: center;
+        line-height: 1.1;
+    }
+
+    .finance-mini-totals strong b {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        font-size: clamp(16px, 4.8vw, 20px);
+        line-height: 1.1;
+    }
+
+    .finance-mini-totals strong em {
+        justify-self: start;
+        margin-top: 5px;
+        font-size: 10px;
+        line-height: 1;
+    }
+
     .pie-row {
         align-items: flex-start;
     }
@@ -8534,6 +8832,36 @@ body {
     .follow-edit-grid input:first-child,
     .follow-edit-grid input:nth-child(2) {
         grid-column: 1 / -1;
+    }
+
+    .follow-edit-grid .follow-time-input,
+    .quick-row .follow-time-input {
+        grid-column: 1 / -1;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .follow-time-input input[type='time'] {
+        width: 100%;
+        min-width: 0;
+        height: 46px;
+    }
+
+    .follow-quick-row button {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .nutrition-task-form .nutrition-time-input {
+        grid-column: 1 / -1;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .nutrition-time-input input[type='time'] {
+        width: 100%;
+        min-width: 0;
+        height: 46px;
     }
 
     .quick-row .time-input {
@@ -8843,6 +9171,26 @@ body {
     .task-list {
         padding: 10px 8px 12px;
         gap: 10px;
+    }
+
+    .category-empty-add {
+        min-height: 24px;
+        margin: 1px 0;
+        gap: 5px;
+        font-size: 10.5px;
+    }
+
+    .category-empty-add.separated {
+        width: min(180px, 72%);
+        margin-top: 2px;
+        padding-top: 8px;
+    }
+
+    .category-empty-add i {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        font-size: 14px;
     }
 
     .task-card {

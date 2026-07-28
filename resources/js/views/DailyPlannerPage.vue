@@ -587,6 +587,10 @@ function moneyLabel(amount: number) {
     return `${new Intl.NumberFormat('en-US').format(amount)} تومان`;
 }
 
+function moneyAmountLabel(amount: number) {
+    return new Intl.NumberFormat('en-US').format(amount);
+}
+
 function formatMoneyInput(value: string) {
     const digits = en(value).replace(/[^\d]/g, '');
     return digits ? new Intl.NumberFormat('en-US').format(Number(digits)) : '';
@@ -1378,6 +1382,7 @@ async function createExpense() {
 
     if (!title || !amount || !categoryId || !accountId) return;
 
+    const scrollY = window.scrollY;
     const { data } = await api.post('/expenses', {
         title,
         amount,
@@ -1399,6 +1404,7 @@ async function createExpense() {
     };
     expenseModal.value = false;
     await loadPlanner();
+    requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' }));
 }
 
 async function deleteExpense(expense: Expense) {
@@ -2054,6 +2060,16 @@ onUnmounted(() => {
                                     <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>
                                 </button>
                             </article>
+                            <button
+                                type="button"
+                                class="category-empty-add"
+                                :class="{ separated: categoryTasks(category.id).length }"
+                                :style="{ '--empty-add-color': category.color, '--empty-add-soft': category.soft_color }"
+                                @click="openTaskModal(category.id)"
+                            >
+                                <i>+</i>
+                                <span>افزودن</span>
+                            </button>
                         </div>
                     </section>
                     </template>
@@ -2074,8 +2090,8 @@ onUnmounted(() => {
                                 <div class="mini-head"><strong>تسک‌های تغذیه</strong><span>{{ fa(nutritionTasks.length) }} مورد</span></div>
                                 <div class="nutrition-task-form">
                                     <input v-model="newNutritionTask.title" placeholder="تسک تغذیه جدید..." @keyup.enter="createNutritionTask" />
-                                    <span class="time-input"><input v-model="newNutritionTask.planned_start_time" type="time" title="شروع" /></span>
-                                    <span class="time-input"><input v-model="newNutritionTask.planned_end_time" type="time" title="پایان" /></span>
+                                    <span class="time-input nutrition-time-input"><input v-model="newNutritionTask.planned_start_time" type="time" title="شروع" aria-label="ساعت شروع تسک تغذیه" /></span>
+                                    <span class="time-input nutrition-time-input"><input v-model="newNutritionTask.planned_end_time" type="time" title="پایان" aria-label="ساعت پایان تسک تغذیه" /></span>
                                     <select v-model="newNutritionTask.priority" title="اولویت">
                                         <option v-for="priority in priorities" :key="`nutrition-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option>
                                     </select>
@@ -2173,10 +2189,10 @@ onUnmounted(() => {
 
                     <section class="follow-card">
                         <div class="section-head"><strong>زنگ‌ها و پیگیری‌ها</strong><span>{{ fa(followUps.length) }} مورد</span></div>
-                        <div class="quick-row">
+                        <div class="quick-row follow-quick-row">
                             <input v-model="followTitle" placeholder="عنوان پیگیری..." />
                             <input v-model="followPerson" placeholder="شخص/موضوع" />
-                            <span class="time-input"><input v-model="followTime" type="time" title="ساعت پیگیری" /></span>
+                            <span class="time-input follow-time-input"><input v-model="followTime" type="time" title="ساعت پیگیری" aria-label="ساعت پیگیری" /></span>
                             <button @click="createFollowUp">افزودن</button>
                         </div>
                         <div v-for="followUp in followUps" :id="`follow-${followUp.id}`" :key="followUp.id" class="follow-item" :class="{ done: followUp.status === 'done' }">
@@ -2185,7 +2201,7 @@ onUnmounted(() => {
                             <div v-else class="follow-edit-grid">
                                 <input v-model="followDrafts[followUp.id].title" placeholder="عنوان" @keyup.enter="updateFollowUp(followUp)" />
                                 <input v-model="followDrafts[followUp.id].person_name" placeholder="شخص/موضوع" @keyup.enter="updateFollowUp(followUp)" />
-                                <span class="time-input"><input v-model="followDrafts[followUp.id].follow_up_time" type="time" @change="updateFollowUp(followUp)" /></span>
+                                <span class="time-input follow-time-input"><input v-model="followDrafts[followUp.id].follow_up_time" type="time" aria-label="ساعت پیگیری" @change="updateFollowUp(followUp)" /></span>
                                 <button class="micro-icon save" title="ذخیره پیگیری" aria-label="ذخیره پیگیری" @click="updateFollowUp(followUp)">
                                     <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>
                                 </button>
@@ -2219,11 +2235,11 @@ onUnmounted(() => {
                         <div class="finance-mini-totals">
                             <div class="income">
                                 <span>درآمد</span>
-                                <strong>{{ moneyLabel(incomeTotal) }}</strong>
+                                <strong><b>{{ moneyAmountLabel(incomeTotal) }}</b><em>تومان</em></strong>
                             </div>
                             <div class="expense">
                                 <span>هزینه</span>
-                                <strong>{{ moneyLabel(expenseTotal) }}</strong>
+                                <strong><b>{{ moneyAmountLabel(expenseTotal) }}</b><em>تومان</em></strong>
                             </div>
                         </div>
 
@@ -2496,7 +2512,10 @@ onUnmounted(() => {
                     <option v-for="group in selectedCategoryGroups" :key="`task-modal-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
                 </select>
                 <textarea v-model="newTask.description" placeholder="توضیح کوتاه..." />
-                <div class="two-cols"><span class="time-input"><input v-model="newTask.planned_start_time" type="time" /></span><span class="time-input"><input v-model="newTask.planned_end_time" type="time" /></span></div>
+                <div class="two-cols">
+                    <span class="time-input modal-time-input"><input v-model="newTask.planned_start_time" type="time" aria-label="ساعت شروع" /><b>شروع</b></span>
+                    <span class="time-input modal-time-input"><input v-model="newTask.planned_end_time" type="time" aria-label="ساعت پایان" /><b>پایان</b></span>
+                </div>
                 <div class="two-cols"><input v-model="newTask.estimated_minutes" type="number" placeholder="مدت تخمینی" /><select v-model="newTask.priority"><option v-for="priority in priorities" :key="`task-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option></select></div>
                 <div class="modal-subtasks" :class="{ 'mobile-open': modalSubtasksOpen || modalSubtasks.length }">
                     <div class="modal-subtasks-head">
