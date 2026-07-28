@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
 
 type Category = { id: number; name: string; color: string; soft_color: string; icon: string; is_default?: boolean; is_active: boolean };
 type CategoryDraft = { name: string; color: string; icon: string; is_active: boolean };
+type TaskGroup = { id: number; category_id: number; name: string; color: string; soft_color: string; sort_order?: number; is_active: boolean };
+type TaskGroupDraft = { name: string; color: string; is_active: boolean };
 type PrioritySetting = { id: number; key: string; label: string; color: string; soft_color: string; is_default?: boolean };
 type PriorityDraft = { label: string; color: string };
 type FinancialAccount = { id: number; name: string; color: string; initial_balance: number; card_number?: string | null; sheba_number?: string | null; income_total: number; expense_total: number; current_balance: number; is_default?: boolean; is_active: boolean };
@@ -15,23 +17,30 @@ type FinanceCategoryDraft = { name: string; color: string; is_active: boolean };
 type SupportTicket = { id: number; subject: string; body: string; status: 'open' | 'answered'; admin_reply?: string | null; created_at: string; replied_at?: string | null };
 
 const router = useRouter();
+const route = useRoute();
 const loading = ref(true);
 const savingId = ref<number | null>(null);
 const savingPriorityId = ref<number | null>(null);
 const categories = ref<Category[]>([]);
+const taskGroups = ref<TaskGroup[]>([]);
 const priorities = ref<PrioritySetting[]>([]);
 const accounts = ref<FinancialAccount[]>([]);
 const financeCategories = ref<FinanceCategory[]>([]);
 const supportTickets = ref<SupportTicket[]>([]);
 const drafts = ref<Record<number, CategoryDraft>>({});
+const taskGroupDrafts = ref<Record<number, TaskGroupDraft>>({});
 const priorityDrafts = ref<Record<number, PriorityDraft>>({});
 const accountDrafts = ref<Record<number, AccountDraft>>({});
 const financeCategoryDrafts = ref<Record<number, FinanceCategoryDraft>>({});
 const draggedCategoryId = ref<number | null>(null);
+const draggedTaskGroupId = ref<number | null>(null);
 const draggedAccountId = ref<number | null>(null);
 const draggedFinanceCategoryId = ref<number | null>(null);
 const expandedIconPicker = ref<Record<string, boolean>>({});
 const newCategory = ref<CategoryDraft>({ name: '', color: '#D63384', icon: 'briefcase', is_active: true });
+const taskGroupModalCategory = ref<Category | null>(null);
+const taskGroupCreateModal = ref(false);
+const newTaskGroup = ref({ name: '', color: '#2563EB' });
 const newPriority = ref<PriorityDraft>({ label: '', color: '#0F766E' });
 const newAccount = ref<AccountDraft>({ name: '', color: '#22D3D0', initial_balance: '', card_number: '', sheba_number: '', is_active: true });
 const newFinanceCategory = ref<Record<'expense' | 'income', FinanceCategoryDraft>>({
@@ -85,6 +94,7 @@ const activePreview = computed(() => categories.value.map((category) => ({
 })).filter((category) => category.is_active));
 const allCategoryCount = computed(() => categories.value.length);
 const activeCategoryCount = computed(() => categories.value.filter((category) => category.is_active).length);
+const activeTaskGroupCount = computed(() => taskGroups.value.filter((group) => group.is_active).length);
 const financeCategoryGroups = computed(() => ({
     expense: financeCategories.value.filter((category) => category.type === 'expense'),
     income: financeCategories.value.filter((category) => category.type === 'income'),
@@ -94,22 +104,37 @@ onMounted(loadCategories);
 
 async function loadCategories() {
     loading.value = true;
-    const [{ data: categoryData }, { data: priorityData }, { data: accountData }, { data: financeCategoryData }] = await Promise.all([
+    const [{ data: categoryData }, { data: taskGroupData }, { data: priorityData }, { data: accountData }, { data: financeCategoryData }] = await Promise.all([
         api.get('/categories', { params: { include_inactive: 1 } }),
+        api.get('/task-groups', { params: { include_inactive: 1 } }),
         api.get('/priorities'),
         api.get('/financial-accounts', { params: { include_inactive: 1 } }),
         api.get('/expense-categories', { params: { include_inactive: 1 } }),
     ]);
     categories.value = categoryData;
+    taskGroups.value = taskGroupData;
     priorities.value = priorityData;
     accounts.value = accountData;
     financeCategories.value = financeCategoryData;
     drafts.value = Object.fromEntries(categories.value.map((category) => [category.id, draftFrom(category)]));
+    taskGroupDrafts.value = Object.fromEntries(taskGroups.value.map((group) => [group.id, taskGroupDraftFrom(group)]));
     priorityDrafts.value = Object.fromEntries(priorities.value.map((priority) => [priority.id, priorityDraftFrom(priority)]));
     accountDrafts.value = Object.fromEntries(accounts.value.map((account) => [account.id, accountDraftFrom(account)]));
     financeCategoryDrafts.value = Object.fromEntries(financeCategories.value.map((category) => [category.id, financeCategoryDraftFrom(category)]));
     loading.value = false;
+    openRequestedTaskGroupModal();
     void loadSupportTickets();
+}
+
+function openRequestedTaskGroupModal() {
+    const categoryId = Number(route.query.taskGroupCategory || 0);
+    if (!categoryId) return;
+    const category = categories.value.find((item) => item.id === categoryId);
+    if (!category) return;
+    openTaskGroupModal(category);
+    if (route.query.createTaskGroup) {
+        openTaskGroupCreateModal();
+    }
 }
 
 async function loadSupportTickets() {
@@ -151,6 +176,10 @@ function accountDraftFrom(account: FinancialAccount): AccountDraft {
 
 function financeCategoryDraftFrom(category: FinanceCategory): FinanceCategoryDraft {
     return { name: category.name, color: category.color, is_active: category.is_active };
+}
+
+function taskGroupDraftFrom(group: TaskGroup): TaskGroupDraft {
+    return { name: group.name, color: group.color, is_active: group.is_active };
 }
 
 function moneyPlain(value: number | string) {
@@ -198,6 +227,19 @@ function accountChanged(account: FinancialAccount) {
 function financeCategoryChanged(category: FinanceCategory) {
     const draft = financeCategoryDrafts.value[category.id];
     return draft && (draft.name !== category.name || draft.color !== category.color || draft.is_active !== category.is_active);
+}
+
+function taskGroupsForCategory(categoryId: number) {
+    return taskGroups.value.filter((group) => group.category_id === categoryId);
+}
+
+function activeGroupsForCategory(categoryId: number) {
+    return taskGroupsForCategory(categoryId).filter((group) => group.is_active);
+}
+
+function taskGroupChanged(group: TaskGroup) {
+    const draft = taskGroupDrafts.value[group.id];
+    return draft && (draft.name !== group.name || draft.color !== group.color || draft.is_active !== group.is_active);
 }
 
 function cleanCard(value: string) {
@@ -255,6 +297,88 @@ async function dropCategory(targetId: number) {
     const { data } = await api.post('/categories/reorder', { category_ids: categories.value.map((category) => category.id) });
     categories.value = data;
     drafts.value = Object.fromEntries(categories.value.map((category) => [category.id, draftFrom(category)]));
+}
+
+function openTaskGroupModal(category: Category) {
+    taskGroupModalCategory.value = category;
+    draggedTaskGroupId.value = null;
+}
+
+function closeTaskGroupModal() {
+    taskGroupModalCategory.value = null;
+    taskGroupCreateModal.value = false;
+    draggedTaskGroupId.value = null;
+}
+
+function openTaskGroupCreateModal() {
+    const category = taskGroupModalCategory.value;
+    if (!category) return;
+    newTaskGroup.value = { name: '', color: category.color };
+    taskGroupCreateModal.value = true;
+}
+
+function closeTaskGroupCreateModal() {
+    taskGroupCreateModal.value = false;
+}
+
+async function createTaskGroup() {
+    const category = taskGroupModalCategory.value;
+    if (!category || !newTaskGroup.value.name.trim()) return;
+
+    const { data } = await api.post('/task-groups', {
+        category_id: category.id,
+        name: newTaskGroup.value.name.trim(),
+        color: newTaskGroup.value.color,
+    });
+    taskGroups.value.push(data);
+    taskGroupDrafts.value[data.id] = taskGroupDraftFrom(data);
+    newTaskGroup.value = { name: '', color: category.color };
+    taskGroupCreateModal.value = false;
+}
+
+async function saveTaskGroup(group: TaskGroup) {
+    const draft = taskGroupDrafts.value[group.id];
+    if (!draft?.name.trim()) return;
+
+    const { data } = await api.put(`/task-groups/${group.id}`, { ...draft, name: draft.name.trim() });
+    taskGroups.value = taskGroups.value.map((item) => item.id === group.id ? data : item);
+    taskGroupDrafts.value[data.id] = taskGroupDraftFrom(data);
+}
+
+async function toggleTaskGroup(group: TaskGroup) {
+    taskGroupDrafts.value[group.id].is_active = !taskGroupDrafts.value[group.id].is_active;
+    await saveTaskGroup(group);
+}
+
+async function deleteTaskGroup(group: TaskGroup) {
+    await api.delete(`/task-groups/${group.id}`);
+    taskGroups.value = taskGroups.value.map((item) => item.id === group.id ? { ...item, is_active: false } : item);
+    if (taskGroupDrafts.value[group.id]) {
+        taskGroupDrafts.value[group.id].is_active = false;
+    }
+}
+
+async function dropTaskGroup(categoryId: number, targetId: number) {
+    const sourceId = draggedTaskGroupId.value;
+    draggedTaskGroupId.value = null;
+    if (!sourceId || sourceId === targetId) return;
+
+    const sameCategory = taskGroupsForCategory(categoryId);
+    const fromIndex = sameCategory.findIndex((group) => group.id === sourceId);
+    const toIndex = sameCategory.findIndex((group) => group.id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const reordered = [...sameCategory];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    taskGroups.value = [
+        ...taskGroups.value.filter((group) => group.category_id !== categoryId),
+        ...reordered,
+    ].sort((a, b) => a.category_id - b.category_id || (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+    const { data } = await api.post('/task-groups/reorder', { task_group_ids: reordered.map((group) => group.id) });
+    taskGroups.value = data;
+    taskGroupDrafts.value = Object.fromEntries(taskGroups.value.map((group) => [group.id, taskGroupDraftFrom(group)]));
 }
 
 async function savePriority(priority: PrioritySetting) {
@@ -457,6 +581,7 @@ async function deleteSupportTicket(ticket: SupportTicket) {
                             <svg viewBox="0 0 24 24"><path :d="category.iconPath"></path></svg>
                         </span>
                         <b>{{ activeCategoryCount }} / {{ allCategoryCount }}</b>
+                        <b class="group-total">{{ activeTaskGroupCount }} گروه</b>
                     </div>
                 </section>
 
@@ -517,6 +642,11 @@ async function deleteSupportTicket(ticket: SupportTicket) {
                             </button>
                         </div>
 
+                        <button class="group-link" type="button" @click="openTaskGroupModal(category)">
+                            گروه‌بندی
+                            <b v-if="activeGroupsForCategory(category.id).length">{{ activeGroupsForCategory(category.id).length }}</b>
+                        </button>
+
                         <footer>
                             <small v-if="category.is_default">پیش‌فرض</small>
                             <small v-else>بخش شخصی</small>
@@ -554,6 +684,106 @@ async function deleteSupportTicket(ticket: SupportTicket) {
                         </footer>
                     </article>
                 </section>
+
+                <div v-if="taskGroupModalCategory" class="settings-modal-backdrop">
+                    <section class="settings-modal group-management-modal" :style="{ '--c': taskGroupModalCategory.color }">
+                        <header>
+                            <div>
+                                <span>گروه‌بندی بخش</span>
+                                <strong>{{ taskGroupModalCategory.name }}</strong>
+                            </div>
+                            <button class="modal-close-btn" type="button" aria-label="بستن" @click="closeTaskGroupModal">×</button>
+                        </header>
+
+                        <div class="group-modal-toolbar">
+                            <div>
+                                <b>{{ activeGroupsForCategory(taskGroupModalCategory.id).length }}</b>
+                                <span>گروه فعال</span>
+                            </div>
+                            <button type="button" @click="openTaskGroupCreateModal">+ افزودن گروه</button>
+                        </div>
+
+                        <div v-if="taskGroupsForCategory(taskGroupModalCategory.id).length" class="group-table-wrap">
+                            <table class="group-table">
+                                <thead>
+                                    <tr>
+                                        <th>ترتیب</th>
+                                        <th>نام گروه</th>
+                                        <th>رنگ</th>
+                                        <th>وضعیت</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="group in taskGroupsForCategory(taskGroupModalCategory.id)"
+                                        :key="`group-modal-${group.id}`"
+                                        :class="{ inactive: !group.is_active, dragging: draggedTaskGroupId === group.id }"
+                                        :style="{ '--g': taskGroupDrafts[group.id]?.color || group.color }"
+                                        draggable="true"
+                                        @dragstart="draggedTaskGroupId = group.id"
+                                        @dragover.prevent
+                                        @drop="dropTaskGroup(taskGroupModalCategory.id, group.id)"
+                                        @dragend="draggedTaskGroupId = null"
+                                    >
+                                        <td data-label="ترتیب"><button class="mini-drag" type="button" title="جابجایی">↕</button></td>
+                                        <td data-label="نام گروه">
+                                            <label class="group-name-cell">
+                                                <i></i>
+                                                <input v-model="taskGroupDrafts[group.id].name" maxlength="100" />
+                                            </label>
+                                        </td>
+                                        <td data-label="رنگ">
+                                            <div class="group-color-cell">
+                                                <button v-for="color in palette" :key="`modal-group-${group.id}-${color}`" :class="{ active: taskGroupDrafts[group.id].color === color }" :style="{ background: color }" @click="taskGroupDrafts[group.id].color = color"></button>
+                                            </div>
+                                        </td>
+                                        <td data-label="وضعیت">
+                                            <label class="active-toggle group-status-toggle">
+                                                <input :checked="taskGroupDrafts[group.id]?.is_active" type="checkbox" @change="toggleTaskGroup(group)" />
+                                                <span>{{ taskGroupDrafts[group.id]?.is_active ? 'فعال' : 'غیرفعال' }}</span>
+                                            </label>
+                                        </td>
+                                        <td data-label="عملیات">
+                                            <div class="group-row-actions">
+                                                <button :disabled="!taskGroupChanged(group)" @click="saveTaskGroup(group)">ثبت</button>
+                                                <button class="delete" @click="deleteTaskGroup(group)">حذف</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div v-else class="group-empty-state">
+                            <strong>هنوز گروهی برای این بخش نداری.</strong>
+                            <button type="button" @click="openTaskGroupCreateModal">اولین گروه را بساز</button>
+                        </div>
+                    </section>
+                </div>
+
+                <div v-if="taskGroupCreateModal && taskGroupModalCategory" class="settings-modal-backdrop top-layer">
+                    <form class="settings-modal group-create-modal" :style="{ '--c': newTaskGroup.color }" @submit.prevent="createTaskGroup">
+                        <header>
+                            <div>
+                                <span>گروه جدید برای</span>
+                                <strong>{{ taskGroupModalCategory.name }}</strong>
+                            </div>
+                            <button class="modal-close-btn" type="button" aria-label="بستن" @click="closeTaskGroupCreateModal">×</button>
+                        </header>
+                        <label>
+                            <span>نام گروه</span>
+                            <input v-model="newTaskGroup.name" placeholder="مثلاً پروژه دستیار" maxlength="100" autofocus />
+                        </label>
+                        <div class="settings-row-label">رنگ گروه</div>
+                        <div class="group-create-swatches">
+                            <button v-for="color in palette" :key="`create-group-${color}`" type="button" :class="{ active: newTaskGroup.color === color }" :style="{ background: color }" @click="newTaskGroup.color = color"></button>
+                        </div>
+                        <footer>
+                            <button type="button" @click="closeTaskGroupCreateModal">انصراف</button>
+                            <button type="submit" :disabled="!newTaskGroup.name.trim()">افزودن</button>
+                        </footer>
+                    </form>
+                </div>
 
                 <section class="settings-hero priority-hero">
                     <div>
@@ -826,6 +1056,8 @@ async function deleteSupportTicket(ticket: SupportTicket) {
 .settings-swatches,.settings-icons{display:flex;gap:7px;flex-wrap:wrap;position:relative;z-index:1}.settings-swatches button{width:28px;height:28px;border:2px solid #3a2e1f;border-radius:9px;box-shadow:1.5px 1.5px 0 #3a2e1f;cursor:pointer}.settings-swatches button.active,.settings-icons button.active{outline:3px solid color-mix(in srgb,var(--c) 30%,white);transform:translateY(-1px)}
 .settings-icons button{width:32px;height:32px;border:2px solid #3a2e1f;border-radius:10px;background:#fff;display:grid;place-items:center;cursor:pointer}.settings-icons svg{width:16px;height:16px;fill:none;stroke:#3a2e1f;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.settings-icons .more-icons-btn{width:auto;min-width:92px;padding:0 10px;background:#fffbf0;color:#3a2e1f;font-family:inherit;font-size:11px;font-weight:900}
 .settings-category-card footer{display:flex;align-items:center;gap:8px;position:relative;z-index:1;padding-top:8px;border-top:1px dashed rgba(58,46,31,.25)}.settings-category-card footer small{margin-left:auto;color:#7a6a4f;font-size:10.5px;font-weight:900}.settings-category-card footer button{height:32px;border:2px solid #3a2e1f;border-radius:10px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;padding:0 12px;font-weight:900;cursor:pointer}.settings-category-card footer button:disabled{opacity:.45;cursor:not-allowed}.settings-category-card footer .delete{background:#fff;color:#dc2626}
+.settings-preview .group-total{background:#fffbf0;color:#3a2e1f;border:2px solid #3a2e1f;border-radius:999px;padding:6px 10px;font-size:11px}.group-link{position:relative;z-index:2;width:max-content;display:inline-flex;align-items:center;gap:7px;border:1.5px solid #3a2e1f;border-radius:999px;background:#fffbf0;color:#3a2e1f;padding:7px 12px;font-family:inherit;font-size:11px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.group-link b{min-width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff;font-size:10px}.task-group-manager{position:relative;z-index:2;display:grid;gap:10px;border:1.5px solid color-mix(in srgb,var(--c) 34%,#eadfbe);border-radius:14px;background:rgba(255,251,240,.82);padding:10px}.task-group-new{display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:8px}.task-group-new input{height:38px!important;border:1.5px solid #eadfbe!important;border-radius:11px!important;background:#fff!important}.task-group-new button:not(.settings-swatches button){height:38px;border:2px solid #3a2e1f;border-radius:11px;background:var(--g);color:#fff;box-shadow:2px 2px 0 #3a2e1f;font-size:20px;font-weight:900;cursor:pointer}.task-group-new button:disabled{opacity:.45}.task-group-new .settings-swatches{grid-column:1/-1;gap:5px}.task-group-new .settings-swatches button,.task-group-row .settings-swatches button{width:18px;height:18px;border-radius:6px;box-shadow:none}.task-group-list{display:grid;gap:8px}.task-group-row{display:grid;grid-template-columns:28px 12px minmax(0,1fr) auto;gap:8px;align-items:center;border:1.5px solid #eadfbe;border-right:5px solid var(--g);border-radius:12px;background:#fff;padding:8px}.task-group-row.inactive{opacity:.52;filter:grayscale(.25)}.task-group-row.dragging{transform:scale(.99);opacity:.55}.task-group-row i{width:10px;height:10px;border-radius:50%;background:var(--g);box-shadow:0 0 0 4px color-mix(in srgb,var(--g) 14%,white)}.task-group-row input{height:32px!important;border:0!important;border-bottom:1px dashed rgba(58,46,31,.25)!important;border-radius:0!important;background:transparent!important;padding:0 4px!important}.mini-drag{width:28px;height:28px;border:1.5px solid #eadfbe;border-radius:9px;background:#fffbf0;color:#8a7a5b;font-weight:900;cursor:grab}.task-group-row .settings-swatches{grid-column:1/-1;gap:5px;padding-right:34px}.task-group-row footer{grid-column:1/-1}.task-group-row footer button{height:28px!important;border-width:1.5px!important;border-radius:9px!important;box-shadow:none!important;font-size:11px}
+.settings-modal-backdrop{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:24px;background:rgba(20,14,28,.58);backdrop-filter:blur(5px)}.settings-modal-backdrop.top-layer{z-index:5010}.settings-modal{width:min(860px,100%);max-height:min(82vh,760px);overflow:auto;border:2px solid #3a2e1f;border-radius:18px;background:#fffbf0;box-shadow:8px 8px 0 rgba(58,46,31,.92);padding:18px;display:grid;gap:14px}.settings-modal header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1.5px dashed #eadfbe}.settings-modal header span{display:block;color:#7a6a4f;font-size:12px;font-weight:900}.settings-modal header strong{display:block;margin-top:2px;font-family:Lalezar,Vazirmatn,sans-serif;font-size:27px;color:#3a2e1f}.modal-close-btn{width:34px;height:34px;border:2px solid #3a2e1f;border-radius:11px;background:#fff;color:#3a2e1f;box-shadow:2px 2px 0 #3a2e1f;font-size:22px;font-weight:900;line-height:1;cursor:pointer}.group-management-modal{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 8%,#fff),#fffbf0 170px)}.group-modal-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px}.group-modal-toolbar>div{display:inline-flex;align-items:center;gap:8px;border:1.5px solid #eadfbe;border-radius:999px;background:#fff;padding:6px 12px;font-size:12px;font-weight:900;color:#7a6a4f}.group-modal-toolbar b{min-width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:var(--c);color:#fff}.group-modal-toolbar button,.group-empty-state button,.group-row-actions button,.group-create-modal footer button{height:36px;border:2px solid #3a2e1f;border-radius:11px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;padding:0 13px;font-family:inherit;font-weight:900;color:#3a2e1f;cursor:pointer}.group-table-wrap{overflow:auto;border:1.5px solid #eadfbe;border-radius:14px;background:#fff}.group-table{width:100%;border-collapse:separate;border-spacing:0;min-width:720px}.group-table th{position:sticky;top:0;z-index:1;background:#fff4d4;color:#7a6a4f;font-size:11px;text-align:right;padding:10px;border-bottom:1.5px solid #eadfbe}.group-table td{padding:10px;border-bottom:1px dashed rgba(58,46,31,.16);vertical-align:middle}.group-table tbody tr{background:#fff}.group-table tbody tr.inactive{opacity:.55;filter:grayscale(.3)}.group-table tbody tr.dragging{opacity:.5}.group-name-cell{display:flex!important;grid-template-columns:none!important;align-items:center;gap:9px}.group-name-cell i{width:13px;height:13px;border-radius:50%;background:var(--g);box-shadow:0 0 0 4px color-mix(in srgb,var(--g) 16%,white);flex:none}.group-name-cell input,.group-create-modal input{width:100%;height:38px;border:1.5px solid #eadfbe;border-radius:11px;background:#fffbf0;padding:0 10px;font-family:inherit;font-weight:900;color:#3a2e1f;outline:0}.group-name-cell input:focus,.group-create-modal input:focus{border-color:var(--g,var(--c));box-shadow:0 0 0 3px color-mix(in srgb,var(--g,var(--c)) 16%,transparent)}.group-color-cell,.group-create-swatches{display:flex;gap:6px;flex-wrap:wrap}.group-color-cell button,.group-create-swatches button{width:22px;height:22px;border:1.5px solid #3a2e1f;border-radius:7px;box-shadow:1px 1px 0 #3a2e1f;cursor:pointer}.group-color-cell button.active,.group-create-swatches button.active{outline:3px solid color-mix(in srgb,var(--c) 26%,white);transform:translateY(-1px)}.group-status-toggle{width:max-content}.group-row-actions{display:flex;align-items:center;gap:7px}.group-row-actions button{height:31px;border-width:1.5px;box-shadow:none;background:#fffbf0;color:#0f766e}.group-row-actions .delete{background:#fff;color:#dc2626}.group-row-actions button:disabled,.group-create-modal footer button:disabled{opacity:.45;cursor:not-allowed}.group-empty-state{min-height:180px;display:grid;place-items:center;gap:12px;text-align:center;border:1.5px dashed #eadfbe;border-radius:14px;background:#fff}.group-empty-state strong{font-size:15px}.group-create-modal{width:min(430px,100%);background:linear-gradient(180deg,color-mix(in srgb,var(--c) 10%,white),#fffbf0)}.group-create-modal label{display:grid;gap:7px}.group-create-modal label span{font-size:11px;color:#7a6a4f;font-weight:900}.group-create-modal footer{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding-top:12px;border-top:1.5px dashed #eadfbe}.group-create-modal footer button[type=button]{background:#fff}.group-create-modal footer button[type=submit]{background:var(--c);color:#fff}
 .priority-hero{margin-top:28px;background:linear-gradient(120deg,#22d3d0,#ffd93d 55%,#ff6fa5)}.priority-preview{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.priority-preview span{min-height:30px;display:inline-flex;align-items:center;justify-content:center;padding:4px 12px;border:2px solid currentColor;border-radius:999px;background:#fff;font-size:12px;font-weight:900}
 .priority-settings-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:10px}.priority-settings-card{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 12%,white),#fff);border:2px solid #3a2e1f;border-radius:16px;padding:14px;box-shadow:4px 4px 0 #3a2e1f;display:grid;gap:10px;position:relative;overflow:hidden}.priority-settings-card::before{content:'';position:absolute;left:-34px;bottom:-44px;width:118px;height:118px;border-radius:50%;background:color-mix(in srgb,var(--c) 16%,transparent)}.priority-chip-preview{width:max-content;max-width:100%;min-height:34px;display:inline-flex;align-items:center;justify-content:center;padding:5px 14px;border:2px solid #3a2e1f;border-radius:999px;box-shadow:2px 2px 0 #3a2e1f;color:#fff;font-weight:900;position:relative;z-index:1}.priority-settings-card label{display:grid;gap:6px;position:relative;z-index:1}.priority-settings-card label span{font-size:11px;color:#7a6a4f;font-weight:900}.priority-settings-card input{height:40px;border:2px solid #3a2e1f;border-radius:11px;background:#fffbf0;padding:0 10px;font-family:inherit;font-weight:900;color:#3a2e1f;outline:0}.priority-settings-card input:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 22%,transparent)}.priority-settings-card footer{display:flex;align-items:center;gap:8px;position:relative;z-index:1;padding-top:8px;border-top:1px dashed rgba(58,46,31,.25)}.priority-settings-card footer small{margin-left:auto;color:#7a6a4f;font-size:10.5px;font-weight:900}.priority-settings-card footer button{height:32px;border:2px solid #3a2e1f;border-radius:10px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;padding:0 12px;font-weight:900;cursor:pointer}.priority-settings-card footer button:disabled{opacity:.45;cursor:not-allowed}.priority-settings-card footer .delete{background:#fff;color:#dc2626}
 .finance-hero{margin-top:28px;background:linear-gradient(120deg,#34d399,#22d3d0 55%,#2563eb)}.account-settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.account-settings-card{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 12%,white),#fff);border:2px solid #3a2e1f;border-radius:16px;padding:14px;box-shadow:4px 4px 0 #3a2e1f;display:grid;gap:10px;position:relative;overflow:hidden}.account-settings-card.inactive{opacity:.58;filter:grayscale(.35)}.account-settings-card.dragging{opacity:.42;transform:scale(.98)}.account-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.account-card-head>div{margin-left:auto}.account-card-head span,.account-settings-card label span{font-size:11px;color:#7a6a4f;font-weight:900}.account-card-head strong{display:block;color:#3a2e1f;font-size:16px}.account-balance-box{border:1.5px dashed color-mix(in srgb,var(--c) 42%,#eadfbe);border-radius:14px;background:#fffbf0;padding:10px;display:grid;gap:3px}.account-balance-box span,.account-balance-box small{color:#7a6a4f;font-size:10.5px;font-weight:900}.account-balance-box strong{font-size:16px;color:var(--c)}.account-settings-card label{display:grid;gap:6px;position:relative;z-index:1}.account-settings-card input{height:40px;border:2px solid #3a2e1f;border-radius:11px;background:#fffbf0;padding:0 10px;font-family:inherit;font-weight:900;color:#3a2e1f;outline:0}.account-settings-card footer{display:flex;align-items:center;gap:8px;position:relative;z-index:1;padding-top:8px;border-top:1px dashed rgba(58,46,31,.25)}.account-settings-card footer small{margin-left:auto;color:#7a6a4f;font-size:10.5px;font-weight:900}.account-settings-card footer button{height:32px;border:2px solid #3a2e1f;border-radius:10px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;padding:0 12px;font-weight:900;cursor:pointer}.account-settings-card footer button:disabled{opacity:.45;cursor:not-allowed}.account-settings-card footer .delete{background:#fff;color:#dc2626}
@@ -836,4 +1068,5 @@ async function deleteSupportTicket(ticket: SupportTicket) {
 @media(max-width:900px){.category-settings-grid,.account-settings-grid,.finance-category-settings{grid-template-columns:repeat(2,1fr)}.priority-settings-grid{grid-template-columns:repeat(2,1fr)}.settings-hero{align-items:flex-start;flex-direction:column}.settings-preview,.priority-preview{justify-content:flex-start}}
 @media(max-width:700px){.finance-category-settings,.settings-support-section{grid-template-columns:1fr}.finance-category-settings-card{grid-template-columns:auto minmax(0,1fr) auto}.finance-category-settings-card i{display:none}.support-ticket-list{grid-column:auto}}
 @media(max-width:560px){.settings-shell{padding:18px 8px 34px}.settings-page{padding:24px 12px 30px}.category-settings-grid,.priority-settings-grid,.account-settings-grid,.finance-category-settings{grid-template-columns:1fr}.settings-title{font-size:28px}.settings-header{align-items:flex-start}.settings-actions{width:100%;justify-content:space-between}.settings-hero{padding:14px}.settings-drawer{left:12px;top:88px}}
+@media(max-width:640px){.settings-modal-backdrop{padding:10px;align-items:start;overflow:auto}.settings-modal{max-height:none;margin:10px 0;padding:14px;border-radius:16px;box-shadow:5px 5px 0 rgba(58,46,31,.92)}.group-modal-toolbar{align-items:stretch;flex-direction:column}.group-modal-toolbar button{width:max-content}.group-table-wrap{overflow:visible;border:0;background:transparent}.group-table{min-width:0;border-spacing:0;display:block}.group-table thead{display:none}.group-table tbody{display:grid;gap:12px}.group-table tr{display:grid!important;grid-template-columns:1fr;gap:10px;border:1.5px solid #eadfbe;border-right:6px solid var(--g);border-radius:14px;background:#fff;padding:12px;box-shadow:2px 2px 0 rgba(58,46,31,.16)}.group-table td{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:center;gap:10px;padding:0;border:0}.group-table td::before{content:attr(data-label);color:#8a7a5b;font-size:11px;font-weight:900}.group-table td[data-label="نام گروه"]{grid-template-columns:1fr}.group-table td[data-label="نام گروه"]::before{margin-bottom:-4px}.group-name-cell input{height:42px;font-size:14px}.group-color-cell{gap:7px}.group-color-cell button{width:25px;height:25px}.group-row-actions{justify-content:flex-start}.group-row-actions button{height:34px}.group-status-toggle{justify-self:start}.mini-drag{width:34px;height:34px}}
 </style>

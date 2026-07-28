@@ -13,11 +13,18 @@ use App\Models\FinanceObligation;
 use App\Models\FinanceObligationPayment;
 use App\Models\FinancialAccount;
 use App\Models\FollowUp;
+use App\Models\Goal;
+use App\Models\GoalMilestone;
+use App\Models\GoalPlanItem;
+use App\Models\GoalProgressLog;
+use App\Models\GroupTaskItem;
+use App\Models\GroupTaskProject;
 use App\Models\MealEntry;
 use App\Models\PrioritySetting;
 use App\Models\RoutineItem;
 use App\Models\SupportTicket;
 use App\Models\Task;
+use App\Models\TaskGroup;
 use App\Models\TaskTimeSession;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -44,7 +51,7 @@ class PlannerController extends Controller
             ->get();
 
         $tasks = Task::query()
-            ->with(['subtasks', 'timeSessions'])
+            ->with(['subtasks.group', 'timeSessions', 'group'])
             ->where('user_id', $user->id)
             ->whereNull('parent_id')
             ->whereDate('task_date', $date)
@@ -87,6 +94,7 @@ class PlannerController extends Controller
         return [
             'date' => $date,
             'categories' => $categories,
+            'taskGroups' => $this->taskGroupsForUser($user->id),
             'priorities' => $this->prioritySettings($user->id),
             'tasks' => $tasks->map(fn (Task $task) => $this->taskPayload($task)),
             'followUps' => $followUps,
@@ -138,6 +146,237 @@ class PlannerController extends Controller
         return $this->dailyNotePayload($note);
     }
 
+    public function goals(Request $request)
+    {
+        $query = Goal::query()
+            ->with(['milestones', 'planItems', 'progressLogs'])
+            ->where('user_id', $request->user()->id);
+
+        $filter = $request->query('filter', 'all');
+        if ($filter && $filter !== 'all') {
+            $query->where('status', $filter);
+        }
+
+        $goals = $query->get();
+        $sort = $request->query('sort', 'priority');
+        $priority = ['atRisk' => 0, 'attention' => 1, 'onTrack' => 2, 'planned' => 3, 'paused' => 4, 'done' => 5, 'archived' => 6];
+
+        $goals = match ($sort) {
+            'deadline' => $goals->sortBy(fn (Goal $goal) => $goal->deadline ? $goal->deadline->timestamp : PHP_INT_MAX),
+            'progress' => $goals->sortByDesc(fn (Goal $goal) => $this->goalPercent($goal)),
+            'created' => $goals->sortByDesc('created_at'),
+            'activity' => $goals->sortByDesc(fn (Goal $goal) => $goal->progressLogs->first()?->logged_at?->timestamp ?? $goal->updated_at?->timestamp ?? 0),
+            default => $goals->sortBy(fn (Goal $goal) => $priority[$goal->status] ?? 9),
+        };
+
+        $allGoals = Goal::query()
+            ->where('user_id', $request->user()->id)
+            ->get();
+
+        return [
+            'stats' => [
+                'activeCount' => $allGoals->whereIn('status', ['onTrack', 'attention', 'atRisk', 'planned'])->count(),
+                'avgProgress' => (int) round($allGoals->avg(fn (Goal $goal) => $this->goalPercent($goal)) ?? 0),
+                'needsAttention' => $allGoals->whereIn('status', ['attention', 'atRisk'])->count(),
+                'completedCount' => $allGoals->where('status', 'done')->count(),
+            ],
+            'goals' => $goals->values()->map(fn (Goal $goal) => $this->goalPayload($goal))->values(),
+        ];
+    }
+
+    public function storeGoal(Request $request)
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'type' => ['required', Rule::in(['numeric', 'doable', 'habit', 'milestone', 'ongoing'])],
+            'category' => ['required', 'string', 'max:80'],
+            'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'why' => ['nullable', 'string', 'max:4000'],
+            'deadline' => ['nullable', 'date'],
+            'start_value' => ['nullable', 'numeric'],
+            'current_value' => ['nullable', 'numeric'],
+            'target_value' => ['nullable', 'numeric'],
+            'unit' => ['nullable', 'string', 'max:40'],
+            'direction' => ['nullable', Rule::in(['increase', 'decrease'])],
+            'next_action' => ['nullable', 'string', 'max:255'],
+            'metadata' => ['nullable', 'array'],
+            'milestones' => ['nullable', 'array'],
+            'milestones.*.title' => ['required_with:milestones', 'string', 'max:255'],
+            'milestones.*.weight' => ['nullable', 'numeric', 'min:0.1', 'max:100'],
+            'milestones.*.starts_on' => ['nullable', 'date'],
+            'milestones.*.ends_on' => ['nullable', 'date'],
+            'milestones.*.dependency' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $milestones = collect($data['milestones'] ?? []);
+        $targetValue = $data['type'] === 'milestone' && $milestones->isNotEmpty()
+            ? $milestones->sum(fn (array $milestone) => (float) ($milestone['weight'] ?? 1))
+            : max(1, (float) ($data['target_value'] ?? 100));
+
+        $goal = Goal::create([
+            'user_id' => $request->user()->id,
+            'title' => trim($data['title']),
+            'type' => $data['type'],
+            'category' => $data['category'],
+            'color' => $data['color'],
+            'icon' => $this->goalIconForType($data['type']),
+            'status' => 'planned',
+            'start_value' => $data['start_value'] ?? 0,
+            'current_value' => $data['current_value'] ?? ($data['start_value'] ?? 0),
+            'target_value' => max(1, $targetValue),
+            'unit' => $data['unit'] ?? '٪',
+            'direction' => $data['direction'] ?? 'increase',
+            'deadline' => $data['deadline'] ?? null,
+            'why' => $data['why'] ?? null,
+            'next_action' => $data['next_action'] ?? 'شروع اولین اقدام',
+            'last_activity_label' => 'همین الان',
+            'metadata' => $data['metadata'] ?? [],
+        ]);
+
+        foreach ($milestones as $index => $milestone) {
+            if (trim($milestone['title'] ?? '') === '') {
+                continue;
+            }
+
+            GoalMilestone::create([
+                'goal_id' => $goal->id,
+                'title' => trim($milestone['title']),
+                'weight' => (float) ($milestone['weight'] ?? 1),
+                'starts_on' => $milestone['starts_on'] ?? null,
+                'ends_on' => $milestone['ends_on'] ?? null,
+                'dependency' => $milestone['dependency'] ?? null,
+                'status' => 'pending',
+                'progress' => 0,
+                'date_label' => 'در انتظار',
+                'sort_order' => $index + 1,
+            ]);
+        }
+
+        GoalPlanItem::create([
+            'goal_id' => $goal->id,
+            'title' => $goal->next_action ?: 'شروع اولین اقدام',
+            'when_label' => 'این هفته',
+            'sort_order' => 1,
+        ]);
+
+        return $this->goalPayload($goal->load(['milestones', 'planItems', 'progressLogs']));
+    }
+
+    public function showGoal(Request $request, Goal $goal)
+    {
+        abort_unless($goal->user_id === $request->user()->id, 404);
+
+        return $this->goalPayload($goal->load(['milestones', 'planItems', 'progressLogs']));
+    }
+
+    public function logGoalProgress(Request $request, Goal $goal)
+    {
+        abort_unless($goal->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'value' => [Rule::requiredIf($goal->type !== 'milestone'), 'nullable', 'numeric'],
+            'milestone_id' => [Rule::requiredIf($goal->type === 'milestone'), 'nullable', 'integer'],
+            'milestone_progress' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'energy' => ['required', 'integer', 'min:1', 'max:5'],
+            'note' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        if ($goal->type === 'milestone') {
+            $milestone = $goal->milestones()->findOrFail($data['milestone_id']);
+            $progress = (int) ($data['milestone_progress'] ?? 100);
+            $done = $progress >= 100;
+
+            $milestone->update([
+                'is_done' => $done,
+                'status' => $done ? 'done' : ($progress > 0 ? 'in_progress' : 'pending'),
+                'progress' => $progress,
+                'date_label' => $done ? 'تکمیل‌شده' : ($progress > 0 ? 'در حال انجام' : 'در انتظار'),
+            ]);
+
+            $freshGoal = $goal->fresh('milestones');
+            $this->syncMilestoneGoalProgress($freshGoal);
+            $freshGoal = $freshGoal->fresh(['milestones', 'planItems', 'progressLogs']);
+
+            GoalProgressLog::create([
+                'goal_id' => $goal->id,
+                'value' => $freshGoal->current_value,
+                'energy' => $data['energy'],
+                'note' => $data['note'] ?: $milestone->title,
+                'logged_at' => now(),
+            ]);
+
+            return $this->goalPayload($goal->fresh()->load(['milestones', 'planItems', 'progressLogs']));
+        }
+
+        $value = (float) $data['value'];
+        GoalProgressLog::create([
+            'goal_id' => $goal->id,
+            'value' => $value,
+            'energy' => $data['energy'],
+            'note' => $data['note'] ?? null,
+            'logged_at' => now(),
+        ]);
+
+        if ($goal->type === 'numeric' && $goal->direction === 'decrease' && (float) $goal->start_value <= (float) $goal->target_value && $value > (float) $goal->target_value) {
+            $goal->start_value = $value;
+        }
+
+        $updates = [
+            'start_value' => $goal->start_value,
+            'current_value' => $value,
+            'last_activity_label' => 'همین الان',
+            'status' => $this->statusAfterProgress($goal, $value),
+        ];
+
+        $goal->update($updates);
+
+        return $this->goalPayload($goal->fresh()->load(['milestones', 'planItems', 'progressLogs']));
+    }
+
+    public function updateGoalStatus(Request $request, Goal $goal)
+    {
+        abort_unless($goal->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['planned', 'onTrack', 'attention', 'atRisk', 'paused', 'done', 'archived'])],
+        ]);
+
+        $goal->update([
+            'status' => $data['status'],
+            'last_activity_label' => 'همین الان',
+        ]);
+
+        return $this->goalPayload($goal->fresh()->load(['milestones', 'planItems', 'progressLogs']));
+    }
+
+    public function toggleGoalMilestone(Request $request, Goal $goal, GoalMilestone $milestone)
+    {
+        abort_unless($goal->user_id === $request->user()->id && $milestone->goal_id === $goal->id, 404);
+
+        $done = $request->boolean('done', ! $milestone->is_done);
+        $milestone->update([
+            'is_done' => $done,
+            'status' => $done ? 'done' : 'pending',
+            'progress' => $done ? 100 : 0,
+            'date_label' => $done ? 'تکمیل‌شده' : 'در انتظار',
+        ]);
+
+        if ($goal->type === 'milestone') {
+            $this->syncMilestoneGoalProgress($goal->fresh('milestones'));
+        }
+
+        return $this->goalPayload($goal->fresh()->load(['milestones', 'planItems', 'progressLogs']));
+    }
+
+    public function destroyGoal(Request $request, Goal $goal)
+    {
+        abort_unless($goal->user_id === $request->user()->id, 404);
+
+        $goal->delete();
+
+        return response()->noContent();
+    }
+
     public function monthlyReport(Request $request)
     {
         $data = $request->validate([
@@ -162,7 +401,7 @@ class PlannerController extends Controller
             ->get();
 
         $tasks = Task::query()
-            ->with(['subtasks.timeSessions', 'timeSessions', 'category'])
+            ->with(['subtasks.timeSessions', 'subtasks.group', 'timeSessions', 'category', 'group'])
             ->where('user_id', $user->id)
             ->whereNull('parent_id')
             ->whereBetween('task_date', [$start->toDateString(), $end->toDateString()])
@@ -233,6 +472,7 @@ class PlannerController extends Controller
             'start' => $start->toDateString(),
             'end' => $end->toDateString(),
             'categories' => $categories,
+            'taskGroups' => $this->taskGroupsForUser($user->id),
             'priorities' => $this->prioritySettings($user->id),
             'category_stats' => $categories->map(function (Category $category) use ($tasks) {
                 $categoryTasks = $tasks->where('category_id', $category->id);
@@ -583,6 +823,228 @@ class PlannerController extends Controller
         return response()->noContent();
     }
 
+    public function taskGroups(Request $request)
+    {
+        return $this->taskGroupsForUser($request->user()->id, $request->boolean('include_inactive'));
+    }
+
+    public function storeTaskGroup(Request $request)
+    {
+        $data = $request->validate([
+            'category_id' => ['required', 'integer'],
+            'name' => ['required', 'string', 'max:100'],
+            'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
+
+        $category = Category::where('user_id', $request->user()->id)->findOrFail($data['category_id']);
+        $sortOrder = TaskGroup::where('user_id', $request->user()->id)
+            ->where('category_id', $category->id)
+            ->max('sort_order') + 1;
+
+        return TaskGroup::create([
+            'user_id' => $request->user()->id,
+            'category_id' => $category->id,
+            'name' => trim($data['name']),
+            'color' => $data['color'],
+            'soft_color' => $this->softColor($data['color']),
+            'sort_order' => $sortOrder,
+            'is_active' => true,
+        ]);
+    }
+
+    public function updateTaskGroup(Request $request, TaskGroup $taskGroup)
+    {
+        abort_unless($taskGroup->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $taskGroup->update([
+            'name' => trim($data['name']),
+            'color' => $data['color'],
+            'soft_color' => $this->softColor($data['color']),
+            'is_active' => $data['is_active'] ?? $taskGroup->is_active,
+        ]);
+
+        if (! $taskGroup->is_active) {
+            Task::where('user_id', $request->user()->id)
+                ->where('task_group_id', $taskGroup->id)
+                ->update(['task_group_id' => null]);
+        }
+
+        return $taskGroup->fresh();
+    }
+
+    public function reorderTaskGroups(Request $request)
+    {
+        $data = $request->validate([
+            'task_group_ids' => ['required', 'array'],
+            'task_group_ids.*' => ['integer'],
+        ]);
+
+        $groups = TaskGroup::where('user_id', $request->user()->id)
+            ->whereIn('id', $data['task_group_ids'])
+            ->get()
+            ->keyBy('id');
+
+        foreach ($data['task_group_ids'] as $index => $groupId) {
+            $groups->get((int) $groupId)?->update(['sort_order' => $index + 1]);
+        }
+
+        return $this->taskGroupsForUser($request->user()->id, true);
+    }
+
+    public function destroyTaskGroup(Request $request, TaskGroup $taskGroup)
+    {
+        abort_unless($taskGroup->user_id === $request->user()->id, 404);
+
+        Task::where('user_id', $request->user()->id)
+            ->where('task_group_id', $taskGroup->id)
+            ->update(['task_group_id' => null]);
+
+        $taskGroup->update(['is_active' => false]);
+
+        return response()->noContent();
+    }
+
+    public function groupTasks(Request $request)
+    {
+        $userId = $request->user()->id;
+        $categories = Category::query()
+            ->where('user_id', $userId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+
+        $taskGroups = TaskGroup::query()
+            ->where('user_id', $userId)
+            ->where('is_active', true)
+            ->orderBy('category_id')
+            ->orderBy('sort_order')
+            ->get();
+
+        $projects = GroupTaskProject::query()
+            ->with(['taskGroup', 'items'])
+            ->where('user_id', $userId)
+            ->orderBy('category_id')
+            ->orderBy('sort_order')
+            ->get();
+
+        return [
+            'sections' => $categories->map(fn (Category $category) => [
+                'id' => $category->id,
+                'name' => $category->name,
+                'color' => $category->color,
+                'soft_color' => $category->soft_color,
+                'groups' => $taskGroups
+                    ->where('category_id', $category->id)
+                    ->map(fn (TaskGroup $group) => $this->groupTaskCatalogPayload($group, $projects->contains('task_group_id', $group->id)))
+                    ->values(),
+                'projects' => $projects
+                    ->where('category_id', $category->id)
+                    ->map(fn (GroupTaskProject $project) => $this->groupTaskProjectPayload($project))
+                    ->values(),
+            ])->values(),
+        ];
+    }
+
+    public function storeGroupTaskProject(Request $request)
+    {
+        $data = $request->validate([
+            'task_group_id' => ['required', 'integer'],
+        ]);
+
+        $group = TaskGroup::where('user_id', $request->user()->id)
+            ->where('is_active', true)
+            ->findOrFail($data['task_group_id']);
+
+        $sortOrder = GroupTaskProject::where('user_id', $request->user()->id)
+            ->where('category_id', $group->category_id)
+            ->max('sort_order') + 1;
+
+        $project = GroupTaskProject::firstOrCreate(
+            ['user_id' => $request->user()->id, 'task_group_id' => $group->id],
+            ['category_id' => $group->category_id, 'sort_order' => $sortOrder],
+        );
+
+        return $this->groupTaskProjectPayload($project->load(['taskGroup', 'items']));
+    }
+
+    public function destroyGroupTaskProject(Request $request, GroupTaskProject $project)
+    {
+        abort_unless($project->user_id === $request->user()->id, 404);
+
+        $project->delete();
+
+        return response()->noContent();
+    }
+
+    public function storeGroupTaskItem(Request $request, GroupTaskProject $project)
+    {
+        abort_unless($project->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+        ]);
+
+        $sortOrder = $project->items()->max('sort_order') + 1;
+        $item = $project->items()->create([
+            'title' => trim($data['title']),
+            'sort_order' => $sortOrder,
+            'is_done' => false,
+        ]);
+
+        return $item;
+    }
+
+    public function updateGroupTaskItem(Request $request, GroupTaskItem $item)
+    {
+        $item->load('project');
+        abort_unless($item->project?->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'is_done' => ['nullable', 'boolean'],
+        ]);
+
+        $item->update([
+            'title' => isset($data['title']) ? trim($data['title']) : $item->title,
+            'is_done' => $data['is_done'] ?? $item->is_done,
+        ]);
+
+        return $item->fresh();
+    }
+
+    public function reorderGroupTaskItems(Request $request, GroupTaskProject $project)
+    {
+        abort_unless($project->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'item_ids' => ['required', 'array'],
+            'item_ids.*' => ['integer'],
+        ]);
+
+        $items = $project->items()->whereIn('id', $data['item_ids'])->get()->keyBy('id');
+        foreach ($data['item_ids'] as $index => $itemId) {
+            $items->get((int) $itemId)?->update(['sort_order' => $index + 1]);
+        }
+
+        return $this->groupTaskProjectPayload($project->fresh(['taskGroup', 'items']));
+    }
+
+    public function destroyGroupTaskItem(Request $request, GroupTaskItem $item)
+    {
+        $item->load('project');
+        abort_unless($item->project?->user_id === $request->user()->id, 404);
+
+        $item->delete();
+
+        return response()->noContent();
+    }
+
     public function priorities(Request $request)
     {
         $this->ensurePrioritySettings($request->user()->id);
@@ -655,6 +1117,7 @@ class PlannerController extends Controller
 
         $data = $request->validate([
             'category_id' => ['required', 'integer'],
+            'task_group_id' => ['nullable', 'integer'],
             'parent_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -666,12 +1129,14 @@ class PlannerController extends Controller
         ]);
 
         $category = Category::where('user_id', $request->user()->id)->findOrFail($data['category_id']);
+        $taskGroupId = $this->validatedTaskGroupId($request->user()->id, $category->id, $data['task_group_id'] ?? null);
         $sortOrder = Task::where('user_id', $request->user()->id)->where('category_id', $category->id)->max('sort_order') + 1;
 
         $task = Task::create([
             ...$data,
             'user_id' => $request->user()->id,
             'category_id' => $category->id,
+            'task_group_id' => $taskGroupId,
             'task_date' => $data['task_date'] ?? now($request->user()->timezone)->toDateString(),
             'sort_order' => $sortOrder,
         ]);
@@ -686,6 +1151,7 @@ class PlannerController extends Controller
             Task::create([
                 'user_id' => $request->user()->id,
                 'category_id' => $category->id,
+                'task_group_id' => $taskGroupId,
                 'parent_id' => $task->id,
                 'title' => trim($title),
                 'task_date' => $task->task_date,
@@ -708,6 +1174,7 @@ class PlannerController extends Controller
 
         $data = $request->validate([
             'category_id' => ['required', 'integer'],
+            'task_group_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'planned_start_time' => ['nullable', 'date_format:H:i'],
@@ -723,8 +1190,10 @@ class PlannerController extends Controller
         ]);
 
         $category = Category::where('user_id', $request->user()->id)->findOrFail($data['category_id']);
+        $taskGroupId = $this->validatedTaskGroupId($request->user()->id, $category->id, $data['task_group_id'] ?? null);
         $task->update([
             'category_id' => $category->id,
+            'task_group_id' => $taskGroupId,
             'title' => $data['title'],
             'description' => $data['description'] ?? null,
             'planned_start_time' => $data['planned_start_time'] ?? null,
@@ -739,6 +1208,7 @@ class PlannerController extends Controller
             $payload = [
                 'user_id' => $request->user()->id,
                 'category_id' => $category->id,
+                'task_group_id' => $taskGroupId,
                 'parent_id' => $task->id,
                 'task_date' => $task->task_date,
                 'title' => trim($subtaskData['title']),
@@ -801,6 +1271,7 @@ class PlannerController extends Controller
         $copy = Task::create([
             'user_id' => $task->user_id,
             'category_id' => $task->category_id,
+            'task_group_id' => $task->task_group_id,
             'title' => $task->title,
             'description' => $task->description,
             'task_date' => $targetDate,
@@ -824,6 +1295,7 @@ class PlannerController extends Controller
             Task::create([
                 'user_id' => $copy->user_id,
                 'category_id' => $copy->category_id,
+                'task_group_id' => $copy->task_group_id,
                 'parent_id' => $copy->id,
                 'title' => $subtask->title,
                 'description' => $subtask->description,
@@ -1404,6 +1876,14 @@ class PlannerController extends Controller
         return [
             'id' => $task->id,
             'category_id' => $task->category_id,
+            'task_group_id' => $task->task_group_id,
+            'group' => $task->group ? [
+                'id' => $task->group->id,
+                'category_id' => $task->group->category_id,
+                'name' => $task->group->name,
+                'color' => $task->group->color,
+                'soft_color' => $task->group->soft_color,
+            ] : null,
             'parent_id' => $task->parent_id,
             'title' => $task->title,
             'description' => $task->description,
@@ -1428,6 +1908,164 @@ class PlannerController extends Controller
                 ->values(),
             'subtasks' => $task->subtasks->map(fn (Task $subtask) => $this->taskPayload($subtask))->values(),
         ];
+    }
+
+    private function goalPayload(Goal $goal): array
+    {
+        $percent = $this->goalPercent($goal);
+        $status = $this->goalStatusMeta($goal->status);
+
+        return [
+            'id' => $goal->id,
+            'title' => $goal->title,
+            'description' => $goal->description,
+            'type' => $goal->type,
+            'category' => $goal->category,
+            'color' => $goal->color,
+            'soft_color' => $this->softColor($goal->color),
+            'icon' => $goal->icon,
+            'status' => $goal->status,
+            'status_label' => $status['label'],
+            'status_bg' => $status['bg'],
+            'status_color' => $status['color'],
+            'start_value' => (float) $goal->start_value,
+            'current_value' => (float) $goal->current_value,
+            'target_value' => (float) $goal->target_value,
+            'unit' => $goal->unit,
+            'direction' => $goal->direction,
+            'deadline' => $goal->deadline ? $this->dateKey($goal->deadline) : null,
+            'days_left' => $goal->deadline ? now()->startOfDay()->diffInDays($goal->deadline, false) : null,
+            'why' => $goal->why,
+            'next_action' => $goal->next_action ?: '—',
+            'last_activity' => $goal->last_activity_label ?: '—',
+            'percent' => $percent,
+            'metadata' => $goal->metadata ?? [],
+            'milestones' => $goal->milestones->map(fn (GoalMilestone $milestone) => [
+                'id' => $milestone->id,
+                'title' => $milestone->title,
+                'is_done' => $milestone->is_done,
+                'weight' => (float) $milestone->weight,
+                'starts_on' => $milestone->starts_on ? $this->dateKey($milestone->starts_on) : null,
+                'ends_on' => $milestone->ends_on ? $this->dateKey($milestone->ends_on) : null,
+                'status' => $milestone->status,
+                'progress' => (int) $milestone->progress,
+                'dependency' => $milestone->dependency,
+                'date_label' => $milestone->date_label ?: '—',
+            ])->values(),
+            'plan_items' => $goal->planItems->map(fn (GoalPlanItem $item) => [
+                'id' => $item->id,
+                'title' => $item->title,
+                'when' => $item->when_label ?: '—',
+            ])->values(),
+            'logs' => $goal->progressLogs->map(fn (GoalProgressLog $log) => [
+                'id' => $log->id,
+                'value' => (float) $log->value,
+                'value_label' => $this->persianNumber($this->plainNumber($log->value)).' '.$goal->unit,
+                'energy' => $log->energy,
+                'note' => $log->note ?: '—',
+                'date_label' => $log->logged_at?->locale('fa')->diffForHumans() ?: '—',
+            ])->values(),
+        ];
+    }
+
+    private function goalPercent(Goal $goal): int
+    {
+        if ($goal->type === 'milestone' && $goal->relationLoaded('milestones') && $goal->milestones->isNotEmpty()) {
+            $totalWeight = max(0.01, (float) $goal->milestones->sum('weight'));
+            $doneWeight = (float) $goal->milestones->sum(fn (GoalMilestone $milestone) => ((int) $milestone->progress / 100) * (float) $milestone->weight);
+
+            return (int) max(0, min(100, round(($doneWeight / $totalWeight) * 100)));
+        }
+
+        $start = (float) $goal->start_value;
+        $current = (float) $goal->current_value;
+        $target = (float) $goal->target_value;
+
+        if ($goal->direction === 'decrease') {
+            if ($start <= $target) {
+                $start = max($target, $current);
+                $target = min((float) $goal->start_value, $current);
+            }
+
+            $total = max(0.01, $start - $target);
+            return (int) max(0, min(100, round((($start - $current) / $total) * 100)));
+        }
+
+        $total = max(0.01, $target - $start);
+        return (int) max(0, min(100, round((($current - $start) / $total) * 100)));
+    }
+
+    private function goalStatusMeta(string $status): array
+    {
+        return [
+            'planned' => ['label' => 'برنامه‌ریزی‌شده', 'bg' => '#DBEAFE', 'color' => '#1D4ED8'],
+            'onTrack' => ['label' => 'در مسیر', 'bg' => '#DCFCE7', 'color' => '#15803D'],
+            'attention' => ['label' => 'نیازمند توجه', 'bg' => '#FEF3C7', 'color' => '#B45309'],
+            'atRisk' => ['label' => 'عقب‌افتاده', 'bg' => '#FEE2E2', 'color' => '#B91C1C'],
+            'paused' => ['label' => 'متوقف', 'bg' => '#F3F4F6', 'color' => '#6B7280'],
+            'done' => ['label' => 'تکمیل‌شده', 'bg' => '#DCFCE7', 'color' => '#15803D'],
+            'archived' => ['label' => 'بایگانی‌شده', 'bg' => '#F3F4F6', 'color' => '#6B7280'],
+        ][$status] ?? ['label' => $status, 'bg' => '#F3F4F6', 'color' => '#6B7280'];
+    }
+
+    private function goalIconForType(string $type): string
+    {
+        return [
+            'numeric' => 'weight',
+            'doable' => 'product',
+            'habit' => 'habit',
+            'milestone' => 'business',
+            'ongoing' => 'reading',
+        ][$type] ?? 'target';
+    }
+
+    private function statusAfterProgress(Goal $goal, float $value): string
+    {
+        $goal->current_value = $value;
+        if ($this->goalPercent($goal) >= 100) {
+            return 'done';
+        }
+
+        return $goal->status === 'planned' ? 'onTrack' : $goal->status;
+    }
+
+    private function syncMilestoneGoalProgress(Goal $goal): void
+    {
+        $totalWeight = max(1, (float) $goal->milestones->sum('weight'));
+        $doneWeight = (float) $goal->milestones->sum(fn (GoalMilestone $milestone) => ((int) $milestone->progress / 100) * (float) $milestone->weight);
+        $status = $doneWeight >= $totalWeight ? 'done' : ($goal->status === 'planned' ? 'onTrack' : $goal->status);
+
+        $goal->update([
+            'start_value' => 0,
+            'current_value' => $doneWeight,
+            'target_value' => $totalWeight,
+            'unit' => 'امتیاز مرحله',
+            'status' => $status,
+            'last_activity_label' => 'همین الان',
+        ]);
+    }
+
+    private function plainNumber(mixed $value): string
+    {
+        $number = (float) $value;
+
+        return rtrim(rtrim(number_format($number, 2, '.', ''), '0'), '.');
+    }
+
+    private function persianNumber(mixed $value): string
+    {
+        return strtr((string) $value, [
+            '0' => '۰',
+            '1' => '۱',
+            '2' => '۲',
+            '3' => '۳',
+            '4' => '۴',
+            '5' => '۵',
+            '6' => '۶',
+            '7' => '۷',
+            '8' => '۸',
+            '9' => '۹',
+        ]);
     }
 
     private function taskActualSeconds(Task $task): int
@@ -1738,6 +2376,63 @@ class PlannerController extends Controller
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->get();
+    }
+
+    private function taskGroupsForUser(int $userId, bool $includeInactive = false)
+    {
+        return TaskGroup::query()
+            ->where('user_id', $userId)
+            ->when(! $includeInactive, fn ($query) => $query->where('is_active', true))
+            ->orderBy('category_id')
+            ->orderBy('sort_order')
+            ->get();
+    }
+
+    private function groupTaskCatalogPayload(TaskGroup $group, bool $alreadyAdded): array
+    {
+        return [
+            'id' => $group->id,
+            'category_id' => $group->category_id,
+            'name' => $group->name,
+            'color' => $group->color,
+            'soft_color' => $group->soft_color,
+            'already_added' => $alreadyAdded,
+        ];
+    }
+
+    private function groupTaskProjectPayload(GroupTaskProject $project): array
+    {
+        $project->loadMissing(['taskGroup', 'items']);
+
+        return [
+            'id' => $project->id,
+            'category_id' => $project->category_id,
+            'task_group_id' => $project->task_group_id,
+            'name' => $project->taskGroup?->name ?? 'بدون نام',
+            'color' => $project->taskGroup?->color ?? '#2563EB',
+            'soft_color' => $project->taskGroup?->soft_color ?? '#EEF2FF',
+            'done_count' => $project->items->where('is_done', true)->count(),
+            'total_count' => $project->items->count(),
+            'items' => $project->items->map(fn (GroupTaskItem $item) => [
+                'id' => $item->id,
+                'title' => $item->title,
+                'is_done' => $item->is_done,
+                'sort_order' => $item->sort_order,
+            ])->values(),
+        ];
+    }
+
+    private function validatedTaskGroupId(int $userId, int $categoryId, mixed $taskGroupId): ?int
+    {
+        if (! $taskGroupId) {
+            return null;
+        }
+
+        return TaskGroup::where('user_id', $userId)
+            ->where('category_id', $categoryId)
+            ->where('is_active', true)
+            ->findOrFail((int) $taskGroupId)
+            ->id;
     }
 
     private function priorityKeys(int $userId): array

@@ -12,6 +12,7 @@ class Task extends Model
     protected $fillable = [
         'user_id',
         'category_id',
+        'task_group_id',
         'parent_id',
         'title',
         'description',
@@ -48,6 +49,11 @@ class Task extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function group()
+    {
+        return $this->belongsTo(TaskGroup::class, 'task_group_id');
     }
 
     public function subtasks()

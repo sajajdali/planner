@@ -4,8 +4,10 @@ import { useRoute, useRouter } from 'vue-router';
 import { isValidJalaaliDate, jalaaliMonthLength, toGregorian, toJalaali } from 'jalaali-js';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
+import PersianDatePicker from '../components/PersianDatePicker.vue';
 
 type Category = { id: number; name: string; color: string; soft_color: string; icon: string };
+type TaskGroup = { id: number; category_id: number; name: string; color: string; soft_color: string; is_active?: boolean };
 type PrioritySetting = { id: number; key: string; label: string; color: string; soft_color: string; is_default?: boolean };
 type ExpenseCategory = { id: number; name: string; color: string; soft_color: string; type: 'expense' | 'income'; is_default?: boolean };
 type FinancialAccount = { id: number; name: string; color: string; initial_balance: number; income_total: number; expense_total: number; current_balance: number; is_default?: boolean; is_active: boolean };
@@ -17,6 +19,8 @@ type Routine = { wake_time: string | null; sleep_time: string | null; items: Rou
 type Task = {
     id: number;
     category_id: number;
+    task_group_id: number | null;
+    group?: TaskGroup | null;
     parent_id: number | null;
     task_date: string | null;
     title: string;
@@ -59,6 +63,7 @@ const calendarRef = ref<HTMLElement | null>(null);
 const calendarYear = ref(0);
 const calendarMonth = ref(0);
 const categories = ref<Category[]>([]);
+const taskGroups = ref<TaskGroup[]>([]);
 const priorities = ref<PrioritySetting[]>([]);
 const tasks = ref<Task[]>([]);
 const followUps = ref<FollowUp[]>([]);
@@ -97,7 +102,7 @@ const referCalendarOpen = ref(false);
 const referCalendarRef = ref<HTMLElement | null>(null);
 const categoryPickerModal = ref(false);
 const selectedCategory = ref<number | null>(null);
-const newTask = ref({ title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '' });
+const newTask = ref({ title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '', task_group_id: '' });
 const modalSubtasks = ref<SubtaskDraft[]>([]);
 const modalSubtaskDraft = ref({ title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' });
 const modalSubtasksOpen = ref(false);
@@ -120,6 +125,9 @@ const reviewSubmitted = ref(false);
 const viewMode = ref<'notebook' | 'table' | 'trello'>('notebook');
 const viewMenuOpen = ref(false);
 const tableStatusFilter = ref<'all' | 'pending' | 'done'>('all');
+const tableFilterOpen = ref(false);
+const tableCategoryFilter = ref('');
+const tableGroupFilter = ref('');
 const seenDueIds = ref<Set<string>>(new Set());
 
 const fallbackPriorities: PrioritySetting[] = [
@@ -197,6 +205,16 @@ const dailyAccountCards = computed(() => financialAccounts.value.map((account) =
     };
 }).filter((account) => account.dailyCount > 0));
 const nutritionCategory = computed(() => categories.value.find((category) => category.icon === 'leaf') ?? categories.value.find((category) => category.name.includes('تغذیه')) ?? null);
+const selectedCategoryGroups = computed(() => selectedCategory.value ? taskGroups.value.filter((group) => group.category_id === selectedCategory.value && group.is_active !== false) : []);
+const tableFilteredCategories = computed(() => {
+    if (!tableCategoryFilter.value) return categories.value;
+    return categories.value.filter((category) => String(category.id) === tableCategoryFilter.value);
+});
+const tableAvailableGroups = computed(() => {
+    if (!tableCategoryFilter.value) return [];
+    return taskGroups.value.filter((group) => String(group.category_id) === tableCategoryFilter.value && group.is_active !== false);
+});
+const tableFilteredTaskCount = computed(() => tableFilteredCategories.value.reduce((sum, category) => sum + tableCategoryTasks(category.id).length, 0));
 const nutritionTasks = computed(() => nutritionCategory.value ? categoryTasks(nutritionCategory.value.id) : []);
 const mealSummary = computed(() => {
     const total = meals.value.length;
@@ -640,6 +658,15 @@ function priorityStyle(key: string) {
     return { background: priority.soft_color, color: priority.color, borderColor: priority.color };
 }
 
+function taskGroupStyle(task: Task) {
+    const group = task.group ?? taskGroups.value.find((item) => item.id === task.task_group_id);
+    return group ? { background: group.soft_color, color: group.color, borderColor: group.color } : {};
+}
+
+function taskGroupLabel(task: Task) {
+    return task.group?.name ?? taskGroups.value.find((item) => item.id === task.task_group_id)?.name ?? '';
+}
+
 function plannedMinutes(task: Task) {
     if (!task.planned_start_time || !task.planned_end_time) return 0;
     const start = minutesFromTime(task.planned_start_time);
@@ -673,9 +700,16 @@ function categoryTasks(categoryId: number) {
 
 function tableCategoryTasks(categoryId: number) {
     const items = categoryTasks(categoryId);
-    if (tableStatusFilter.value === 'done') return items.filter((task) => task.status === 'done');
-    if (tableStatusFilter.value === 'pending') return items.filter((task) => task.status !== 'done');
-    return items;
+    const groupFiltered = tableGroupFilter.value ? items.filter((task) => String(task.task_group_id || '') === tableGroupFilter.value) : items;
+    if (tableStatusFilter.value === 'done') return groupFiltered.filter((task) => task.status === 'done');
+    if (tableStatusFilter.value === 'pending') return groupFiltered.filter((task) => task.status !== 'done');
+    return groupFiltered;
+}
+
+function resetTableFilters() {
+    tableStatusFilter.value = 'all';
+    tableCategoryFilter.value = '';
+    tableGroupFilter.value = '';
 }
 
 function categoryStats(categoryId: number) {
@@ -710,6 +744,7 @@ async function loadPlanner() {
     loading.value = true;
     const { data } = await api.get('/daily-planner', { params: { date: date.value } });
     categories.value = data.categories;
+    taskGroups.value = data.taskGroups ?? [];
     priorities.value = data.priorities?.length ? data.priorities : fallbackPriorities;
     tasks.value = data.tasks;
     tasks.value.forEach((task) => {
@@ -888,7 +923,7 @@ function closeReferCalendarOnOutsideClick(event: MouseEvent) {
 function openTaskModal(categoryId: number) {
     editingTask.value = null;
     selectedCategory.value = categoryId;
-    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '' };
+    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '', task_group_id: '' };
     modalSubtasks.value = [];
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     modalSubtasksOpen.value = false;
@@ -907,6 +942,7 @@ function openEditTaskModal(task: Task) {
         priority: task.priority || 'medium',
         description: task.description || '',
         subtasks: '',
+        task_group_id: task.task_group_id ? String(task.task_group_id) : '',
     };
     modalSubtasks.value = task.subtasks.map((subtask) => ({
         id: subtask.id,
@@ -925,7 +961,7 @@ function closeTaskModal() {
     taskModal.value = false;
     editingTask.value = null;
     selectedCategory.value = null;
-    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '' };
+    newTask.value = { title: '', planned_start_time: '', planned_end_time: '', estimated_minutes: '', priority: 'medium', description: '', subtasks: '', task_group_id: '' };
     modalSubtasks.value = [];
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     modalSubtasksOpen.value = false;
@@ -1017,6 +1053,7 @@ async function createTask() {
     const { data } = await api.post('/tasks', {
         ...newTask.value,
         category_id: selectedCategory.value,
+        task_group_id: selectedCategoryGroups.value.some((group) => String(group.id) === newTask.value.task_group_id) ? newTask.value.task_group_id : null,
         task_date: date.value,
         estimated_minutes: newTask.value.estimated_minutes || null,
         planned_start_time: newTask.value.planned_start_time || null,
@@ -1035,6 +1072,7 @@ async function updateTask() {
     const { data } = await api.put(`/tasks/${task.id}`, {
         ...newTask.value,
         category_id: selectedCategory.value,
+        task_group_id: selectedCategoryGroups.value.some((group) => String(group.id) === newTask.value.task_group_id) ? newTask.value.task_group_id : null,
         estimated_minutes: newTask.value.estimated_minutes || null,
         planned_start_time: newTask.value.planned_start_time || null,
         planned_end_time: newTask.value.planned_end_time || null,
@@ -1495,6 +1533,17 @@ watch(() => newExpense.value.type, () => {
     syncFinanceCategorySelection();
 });
 
+watch(tableCategoryFilter, () => {
+    tableGroupFilter.value = '';
+});
+
+watch(selectedCategory, () => {
+    if (!taskModal.value) return;
+    if (!selectedCategoryGroups.value.some((group) => String(group.id) === newTask.value.task_group_id)) {
+        newTask.value.task_group_id = '';
+    }
+});
+
 watch(dueNotifications, (items) => {
     items.forEach((item) => seenDueIds.value.add(item.id));
 });
@@ -1619,23 +1668,8 @@ onUnmounted(() => {
                         <button title="روز بعد" @click="shiftDate(1)">›</button>
                         <label class="jalali-picker">
                             <span>تاریخ شمسی</span>
-                            <input v-model="jalaliDateInput" type="text" inputmode="numeric" placeholder="۱۴۰۵/۰۵/۰۴" readonly @click="openJalaliCalendar" />
+                            <PersianDatePicker :model-value="date" placeholder="۱۴۰۵/۰۵/۰۴" @update:model-value="setPlannerDate($event)" />
                         </label>
-                        <div v-if="calendarOpen" class="jalali-calendar">
-                            <div class="jalali-calendar-head">
-                                <button title="ماه قبل" @click="changeJalaliMonth(-1)">‹</button>
-                                <strong>{{ jalaliMonthName }} {{ fa(calendarYear) }}</strong>
-                                <button title="ماه بعد" @click="changeJalaliMonth(1)">›</button>
-                            </div>
-                            <div class="jalali-weekdays">
-                                <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
-                            </div>
-                            <div class="jalali-days">
-                                <button v-for="day in calendarDays" :key="day" :class="{ selected: isSelectedJalaliDay(day) }" @click="selectJalaliDay(day)">
-                                    {{ fa(day) }}
-                                </button>
-                            </div>
-                        </div>
                     </div>
                     <p v-if="dateError" class="date-error">{{ dateError }}</p>
                 </section>
@@ -1719,9 +1753,30 @@ onUnmounted(() => {
                                 <button :class="{ active: tableStatusFilter === 'pending' }" @click="tableStatusFilter = 'pending'">مانده</button>
                                 <button :class="{ active: tableStatusFilter === 'done' }" @click="tableStatusFilter = 'done'">تمام شده</button>
                             </div>
-                            <span>{{ fa(tasks.length) }} وظیفه</span>
+                            <button class="table-filter-toggle" :class="{ active: tableFilterOpen || tableCategoryFilter || tableGroupFilter }" @click="tableFilterOpen = !tableFilterOpen">
+                                فیلتر
+                                <b v-if="tableCategoryFilter || tableGroupFilter">•</b>
+                            </button>
+                            <span>{{ fa(tableFilteredTaskCount) }} وظیفه</span>
                         </div>
-                        <div v-for="category in categories" :key="`table-${category.id}`" class="simple-task-table">
+                        <div v-if="tableFilterOpen" class="table-advanced-filter">
+                            <label>
+                                <span>بخش</span>
+                                <select v-model="tableCategoryFilter">
+                                    <option value="">همه بخش‌ها</option>
+                                    <option v-for="category in categories" :key="`table-filter-category-${category.id}`" :value="String(category.id)">{{ category.name }}</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>گروه‌بندی</span>
+                                <select v-model="tableGroupFilter" :disabled="!tableCategoryFilter || !tableAvailableGroups.length">
+                                    <option value="">{{ tableCategoryFilter ? 'همه گروه‌ها' : 'اول بخش را انتخاب کن' }}</option>
+                                    <option v-for="group in tableAvailableGroups" :key="`table-filter-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
+                                </select>
+                            </label>
+                            <button type="button" :disabled="!tableCategoryFilter && !tableGroupFilter && tableStatusFilter === 'all'" @click="resetTableFilters">پاک کردن</button>
+                        </div>
+                        <div v-for="category in tableFilteredCategories" :key="`table-${category.id}`" class="simple-task-table">
                             <div class="simple-table-title" :style="{ '--c': category.color, '--soft': category.soft_color }">
                                 <span></span>
                                 <strong>{{ category.name }}</strong>
@@ -1747,6 +1802,7 @@ onUnmounted(() => {
                                                 <td class="table-task-title">
                                                     <button class="check-btn table-task-check" :class="{ checked: task.status === 'done' }" aria-label="تغییر وضعیت وظیفه" @click.stop="toggleTask(task)">✓</button>
                                                     <strong>{{ task.title }}</strong>
+                                                    <span v-if="taskGroupLabel(task)" class="task-group-pill" :style="taskGroupStyle(task)">{{ taskGroupLabel(task) }}</span>
                                                     <small v-if="task.description">{{ task.description }}</small>
                                                     <button v-if="task.description" class="info-icon table-info" title="مشاهده توضیحات" aria-label="مشاهده توضیحات" @click.stop="openDescriptionModal(task)">i</button>
                                                 </td>
@@ -1822,6 +1878,7 @@ onUnmounted(() => {
                                         <div class="trello-card-labels">
                                             <i :style="{ background: category.color }"></i>
                                             <span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span>
+                                            <span v-if="taskGroupLabel(task)" class="task-group-pill" :style="taskGroupStyle(task)">{{ taskGroupLabel(task) }}</span>
                                             <mark v-if="task.status === 'done'">انجام شد</mark>
                                             <mark v-if="isReferred(task)" class="refer-text-badge" title="ارجاع داده شده">ارجاع شد</mark>
                                             <button v-else class="refer-icon" title="ارجاع به روز دیگر" aria-label="ارجاع به روز دیگر" @click="openReferModal(task)"><svg viewBox="0 0 24 24"><path d="M7 17L17 7"></path><path d="M10 7h7v7"></path></svg></button>
@@ -1923,6 +1980,7 @@ onUnmounted(() => {
                                         <button class="check-btn title-check" :class="{ checked: task.status === 'done' }" @click="toggleTask(task)">✓</button>
                                         <strong>{{ task.title }}</strong>
                                         <span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span>
+                                        <span v-if="taskGroupLabel(task)" class="task-group-pill" :style="taskGroupStyle(task)">{{ taskGroupLabel(task) }}</span>
                                         <button class="edit-icon" title="ویرایش وظیفه" aria-label="ویرایش وظیفه" @click.stop="openEditTaskModal(task)"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg></button>
                                         <mark v-if="task.status === 'done'" class="done-badge">انجام شد</mark>
                                         <mark v-if="isReferred(task)" class="refer-text-badge" title="ارجاع داده شده">ارجاع شد</mark>
@@ -2425,6 +2483,10 @@ onUnmounted(() => {
                 <input v-model="newTask.title" placeholder="عنوان وظیفه" required />
                 <select v-model="selectedCategory" required>
                     <option v-for="category in categories" :key="`task-modal-category-${category.id}`" :value="category.id">{{ category.name }}</option>
+                </select>
+                <select v-if="selectedCategoryGroups.length" v-model="newTask.task_group_id" class="task-group-select">
+                    <option value="">بدون گروه‌بندی</option>
+                    <option v-for="group in selectedCategoryGroups" :key="`task-modal-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
                 </select>
                 <textarea v-model="newTask.description" placeholder="توضیح کوتاه..." />
                 <div class="two-cols"><input v-model="newTask.planned_start_time" type="time" /><input v-model="newTask.planned_end_time" type="time" /></div>

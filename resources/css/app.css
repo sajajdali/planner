@@ -1243,6 +1243,22 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     line-height: 1.2;
     white-space: nowrap;
 }
+.task-group-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    max-width: 150px;
+    padding: 2px 9px;
+    border: 1.5px solid currentColor;
+    border-radius: 999px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.2;
+}
 .task-content p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
 .subtasks { margin-top: 9px; display: grid; gap: 6px; }
 .subtasks span { background: #f8f9fc; border-radius: 9px; padding: 7px 10px; font-size: 12px; color: #4b5566; }
@@ -4774,6 +4790,97 @@ body {
     box-shadow: inset 0 0 0 1.5px #3a2e1f;
 }
 
+.table-filter-toggle {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1.5px solid #3a2e1f;
+    border-radius: 10px;
+    background: #fff;
+    color: #3a2e1f;
+    box-shadow: 2px 2px 0 #3a2e1f;
+    padding: 0 10px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.table-filter-toggle.active {
+    background: #22d3d0;
+    color: #fff;
+}
+
+.table-filter-toggle b {
+    color: #ffd93d;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.table-advanced-filter {
+    display: grid;
+    grid-template-columns: minmax(140px, 220px) minmax(140px, 220px) auto;
+    align-items: end;
+    gap: 9px;
+    margin-top: 12px;
+    padding: 10px;
+    border: 1.5px solid #eadfbe;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .72);
+}
+
+.table-advanced-filter label {
+    display: grid;
+    gap: 5px;
+}
+
+.table-advanced-filter label span {
+    color: #7a6a4f;
+    font-size: 10.5px;
+    font-weight: 900;
+}
+
+.table-advanced-filter select {
+    height: 34px;
+    border: 1.5px solid #eadfbe;
+    border-radius: 10px;
+    background: #fffbf0;
+    color: #3a2e1f;
+    padding: 0 9px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 900;
+    outline: 0;
+}
+
+.table-advanced-filter select:focus {
+    border-color: #22d3d0;
+    box-shadow: 0 0 0 3px rgba(34, 211, 208, .16);
+}
+
+.table-advanced-filter select:disabled {
+    opacity: .58;
+}
+
+.table-advanced-filter > button {
+    height: 34px;
+    border: 1.5px solid #3a2e1f;
+    border-radius: 10px;
+    background: #fff;
+    color: #7a6a4f;
+    padding: 0 11px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.table-advanced-filter > button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
 .simple-table-title {
     display: flex;
     align-items: center;
@@ -4804,6 +4911,16 @@ body {
 
 .table-scroll {
     overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+    .table-advanced-filter {
+        grid-template-columns: 1fr;
+    }
+
+    .table-advanced-filter > button {
+        width: max-content;
+    }
 }
 
 .simple-task-table table {
@@ -6637,6 +6754,15 @@ body {
     box-shadow: 4px 4px 0 #3a2e1f;
 }
 
+.jalali-calendar-floating {
+    position: fixed !important;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    max-width: calc(100vw - 24px);
+    z-index: 12000 !important;
+}
+
 .jalali-calendar-head {
     display: flex;
     align-items: center;
@@ -6695,6 +6821,47 @@ body {
     border-color: #3a2e1f;
     box-shadow: 2px 2px 0 #3a2e1f;
     transform: translate(-1px, -1px);
+}
+
+.persian-date-picker {
+    position: relative;
+}
+
+.persian-date-input {
+    width: 100%;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1.5px solid #efe3c4;
+    border-radius: 9px;
+    background: #fff;
+    color: #1f2937;
+    padding: 0 10px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.persian-date-input span {
+    direction: ltr;
+}
+
+.persian-date-input span.muted {
+    color: #b7a98c;
+}
+
+.persian-date-input svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: none;
 }
 
 .inline-subtask {
@@ -7423,6 +7590,11 @@ body {
 .task-modal-card select {
     width: 100%;
     min-width: 0;
+}
+
+.task-modal-card .task-group-select {
+    border-color: #d63384;
+    background: linear-gradient(90deg, #fff, #fff7fb);
 }
 
 .modal-subtasks-head {
