@@ -1050,6 +1050,150 @@ textarea { resize: vertical; min-height: 76px; }
     font-weight: 900;
 }
 
+@media (max-width: 640px) {
+    .auth-shell {
+        min-height: 100dvh;
+        display: grid;
+        place-items: start center;
+        padding: 18px 10px 36px;
+        overflow-x: hidden;
+    }
+
+    .auth-card {
+        width: 100%;
+        max-width: min(430px, calc(100vw - 20px));
+        min-width: 0;
+        padding: 24px 16px 26px;
+        gap: 14px;
+        transform: none;
+        box-sizing: border-box;
+        overflow: visible;
+    }
+
+    .auth-otp-card {
+        min-height: 0;
+    }
+
+    .auth-card .landing-tape {
+        max-width: 84px;
+        height: 26px;
+    }
+
+    .auth-brand {
+        gap: 6px;
+    }
+
+    .auth-brand .notebook-logo {
+        width: 58px;
+        height: 58px;
+    }
+
+    .auth-brand strong {
+        font-size: 31px;
+        line-height: 1.25;
+    }
+
+    .auth-brand span,
+    .auth-form p,
+    .auth-done p {
+        max-width: 100%;
+        font-size: 12px;
+        line-height: 1.9;
+        overflow-wrap: anywhere;
+    }
+
+    .auth-tabs {
+        width: 100%;
+        min-width: 0;
+        padding: 4px;
+        border-radius: 13px;
+        box-sizing: border-box;
+    }
+
+    .auth-tabs a {
+        min-width: 0;
+        height: 42px;
+        font-size: 13px;
+    }
+
+    .auth-form {
+        width: 100%;
+        min-width: 0;
+        gap: 12px;
+    }
+
+    .auth-form h1,
+    .auth-done h1 {
+        max-width: 100%;
+        font-size: 29px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+
+    .auth-form label {
+        min-width: 0;
+        font-size: 12px;
+    }
+
+    .auth-form input {
+        width: 100%;
+        min-width: 0;
+        height: 46px;
+        padding: 0 12px;
+        box-sizing: border-box;
+    }
+
+    .auth-form .phone-input,
+    .auth-form .otp-input {
+        height: 54px;
+        font-size: clamp(24px, 9vw, 38px);
+        letter-spacing: 0;
+    }
+
+    .auth-form button,
+    .auth-done button {
+        width: 100%;
+        min-width: 0;
+        height: 50px;
+        font-size: 17px;
+        box-sizing: border-box;
+    }
+
+    .auth-checkmark {
+        width: 62px;
+        height: 62px;
+        font-size: 34px;
+    }
+}
+
+@media (max-width: 380px) {
+    .auth-shell {
+        padding-inline: 8px;
+    }
+
+    .auth-card {
+        max-width: calc(100vw - 16px);
+        padding: 22px 12px 24px;
+        gap: 12px;
+    }
+
+    .auth-brand .notebook-logo {
+        width: 52px;
+        height: 52px;
+    }
+
+    .auth-brand strong,
+    .auth-form h1,
+    .auth-done h1 {
+        font-size: 25px;
+    }
+
+    .auth-form .phone-input,
+    .auth-form .otp-input {
+        font-size: clamp(22px, 8.4vw, 31px);
+    }
+}
+
 .planner-shell { min-height: 100vh; display: flex; background: var(--bg); }
 .sidebar { width: 236px; min-height: 100vh; position: sticky; top: 0; background: var(--dark); color: #c9cedb; display: flex; flex-direction: column; padding: 22px 16px; flex-shrink: 0; }
 .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; color: white; }
