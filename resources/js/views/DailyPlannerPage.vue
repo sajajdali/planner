@@ -106,6 +106,8 @@ const newTask = ref({ title: '', planned_start_time: '', planned_end_time: '', e
 const modalSubtasks = ref<SubtaskDraft[]>([]);
 const modalSubtaskDraft = ref({ title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' });
 const modalSubtasksOpen = ref(false);
+const editingModalSubtaskIndex = ref<number | null>(null);
+const taskGroupSearch = ref('');
 const inlineSubtasks = ref<Record<number, { title: string; planned_start_time: string; planned_end_time: string; priority: string }>>({});
 const inlineSubtaskOpen = ref<Record<number, boolean>>({});
 const draggedTaskId = ref<number | null>(null);
@@ -207,6 +209,14 @@ const dailyAccountCards = computed(() => financialAccounts.value.map((account) =
 }).filter((account) => account.dailyCount > 0));
 const nutritionCategory = computed(() => categories.value.find((category) => category.icon === 'leaf') ?? categories.value.find((category) => category.name.includes('تغذیه')) ?? null);
 const selectedCategoryGroups = computed(() => selectedCategory.value ? taskGroups.value.filter((group) => group.category_id === selectedCategory.value && group.is_active !== false) : []);
+const filteredSelectedCategoryGroups = computed(() => {
+    const query = taskGroupSearch.value.trim().toLowerCase();
+    if (!query) return selectedCategoryGroups.value;
+
+    const filtered = selectedCategoryGroups.value.filter((group) => group.name.toLowerCase().includes(query));
+    const selected = selectedCategoryGroups.value.find((group) => String(group.id) === newTask.value.task_group_id);
+    return selected && !filtered.some((group) => group.id === selected.id) ? [selected, ...filtered] : filtered;
+});
 const tableFilteredCategories = computed(() => {
     if (!tableCategoryFilter.value) return categories.value;
     return categories.value.filter((category) => String(category.id) === tableCategoryFilter.value);
@@ -937,6 +947,8 @@ function openTaskModal(categoryId: number) {
     modalSubtasks.value = [];
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     modalSubtasksOpen.value = false;
+    editingModalSubtaskIndex.value = null;
+    taskGroupSearch.value = '';
     categoryPickerModal.value = false;
     taskModal.value = true;
 }
@@ -963,6 +975,8 @@ function openEditTaskModal(task: Task) {
     }));
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     modalSubtasksOpen.value = Boolean(modalSubtasks.value.length);
+    editingModalSubtaskIndex.value = null;
+    taskGroupSearch.value = '';
     categoryPickerModal.value = false;
     taskModal.value = true;
 }
@@ -975,6 +989,8 @@ function closeTaskModal() {
     modalSubtasks.value = [];
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
     modalSubtasksOpen.value = false;
+    editingModalSubtaskIndex.value = null;
+    taskGroupSearch.value = '';
 }
 
 function openDescriptionModal(task: Task) {
@@ -1033,23 +1049,55 @@ function openCategoryPicker() {
 function addModalSubtask() {
     const title = modalSubtaskDraft.value.title.trim();
     if (!title) return;
-    modalSubtasks.value.push({
+    const payload = {
+        ...(editingModalSubtaskIndex.value !== null ? { id: modalSubtasks.value[editingModalSubtaskIndex.value]?.id } : {}),
         title,
         planned_start_time: modalSubtaskDraft.value.planned_start_time,
         planned_end_time: modalSubtaskDraft.value.planned_end_time,
         priority: modalSubtaskDraft.value.priority,
-    });
+    };
+    if (editingModalSubtaskIndex.value !== null) {
+        modalSubtasks.value.splice(editingModalSubtaskIndex.value, 1, payload);
+        editingModalSubtaskIndex.value = null;
+    } else {
+        modalSubtasks.value.push(payload);
+    }
     modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
 }
 
 function removeModalSubtask(index: number) {
     modalSubtasks.value.splice(index, 1);
+    if (editingModalSubtaskIndex.value === index) {
+        editingModalSubtaskIndex.value = null;
+        modalSubtaskDraft.value = { title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' };
+    } else if (editingModalSubtaskIndex.value !== null && editingModalSubtaskIndex.value > index) {
+        editingModalSubtaskIndex.value -= 1;
+    }
+}
+
+function editModalSubtask(index: number) {
+    const subtask = modalSubtasks.value[index];
+    if (!subtask) return;
+    editingModalSubtaskIndex.value = index;
+    modalSubtaskDraft.value = {
+        title: subtask.title,
+        planned_start_time: subtask.planned_start_time || '',
+        planned_end_time: subtask.planned_end_time || '',
+        priority: subtask.priority || 'medium',
+    };
+    modalSubtasksOpen.value = true;
+}
+
+function modalSubtaskMeta(subtask: SubtaskDraft) {
+    const times = [subtask.planned_start_time, subtask.planned_end_time].filter(Boolean).join(' تا ');
+    return [times, priorityLabel(subtask.priority)].filter(Boolean).join(' · ');
 }
 
 function moveModalSubtask(fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex || toIndex < 0 || toIndex >= modalSubtasks.value.length) return;
     const [item] = modalSubtasks.value.splice(fromIndex, 1);
     modalSubtasks.value.splice(toIndex, 0, item);
+    if (editingModalSubtaskIndex.value === fromIndex) editingModalSubtaskIndex.value = toIndex;
 }
 
 function dropModalSubtask(toIndex: number) {
@@ -1552,6 +1600,7 @@ watch(tableCategoryFilter, () => {
 
 watch(selectedCategory, () => {
     if (!taskModal.value) return;
+    taskGroupSearch.value = '';
     if (!selectedCategoryGroups.value.some((group) => String(group.id) === newTask.value.task_group_id)) {
         newTask.value.task_group_id = '';
     }
@@ -1975,7 +2024,7 @@ onUnmounted(() => {
                                 :key="task.id"
                                 :id="`task-${task.id}`"
                                 class="task-card"
-                                :class="{ done: task.status === 'done', dragging: draggedTaskId === task.id, running: isTaskTimerRunning(task), paused: isTaskTimerPaused(task), referred: isReferred(task) }"
+                                :class="{ done: task.status === 'done', dragging: draggedTaskId === task.id, running: isTaskTimerRunning(task), paused: isTaskTimerPaused(task), referred: isReferred(task), 'has-task-group': Boolean(taskGroupLabel(task)) }"
                                 :style="{ borderRightColor: category.color }"
                                 draggable="true"
                                 @dragstart="draggedTaskId = task.id"
@@ -1986,6 +2035,7 @@ onUnmounted(() => {
                                 <div class="task-time-chip" :class="{ live: isTaskTimerRunning(task), paused: isTaskTimerPaused(task) }">
                                     <button type="button" class="time-chip-action" @click="timeLogTask = task"><b>کارکرد</b><strong>{{ timeLabel(taskTotalSeconds(task)) }}</strong></button>
                                     <span><b>برنامه</b><em>{{ taskPlannedLabel(task) }}</em></span>
+                                    <span v-if="taskGroupLabel(task)"><b>پروژه</b><em>{{ taskGroupLabel(task) }}</em></span>
                                 </div>
                                 <span class="task-number" :style="{ background: category.color }">{{ fa(index + 1) }}</span>
                                 <div class="task-content">
@@ -1993,7 +2043,6 @@ onUnmounted(() => {
                                         <button class="check-btn title-check" :class="{ checked: task.status === 'done' }" @click="toggleTask(task)">✓</button>
                                         <strong>{{ task.title }}</strong>
                                         <span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span>
-                                        <span v-if="taskGroupLabel(task)" class="task-group-pill" :style="taskGroupStyle(task)">{{ taskGroupLabel(task) }}</span>
                                         <button class="edit-icon" title="ویرایش وظیفه" aria-label="ویرایش وظیفه" @click.stop="openEditTaskModal(task)"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg></button>
                                         <mark v-if="task.status === 'done'" class="done-badge">انجام شد</mark>
                                         <mark v-if="isReferred(task)" class="refer-text-badge" title="ارجاع داده شده">ارجاع شد</mark>
@@ -2507,10 +2556,14 @@ onUnmounted(() => {
                 <select v-model="selectedCategory" required>
                     <option v-for="category in categories" :key="`task-modal-category-${category.id}`" :value="category.id">{{ category.name }}</option>
                 </select>
-                <select v-if="selectedCategoryGroups.length" v-model="newTask.task_group_id" class="task-group-select">
-                    <option value="">بدون گروه‌بندی</option>
-                    <option v-for="group in selectedCategoryGroups" :key="`task-modal-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
-                </select>
+                <div v-if="selectedCategoryGroups.length" class="task-group-picker">
+                    <input v-if="selectedCategoryGroups.length > 6" v-model="taskGroupSearch" class="task-group-search" placeholder="جستجوی گروه‌بندی..." />
+                    <select v-model="newTask.task_group_id" class="task-group-select">
+                        <option value="">بدون گروه‌بندی</option>
+                        <option v-for="group in filteredSelectedCategoryGroups" :key="`task-modal-group-${group.id}`" :value="String(group.id)">{{ group.name }}</option>
+                    </select>
+                    <small v-if="taskGroupSearch && !filteredSelectedCategoryGroups.length">گروهی با این نام پیدا نشد.</small>
+                </div>
                 <textarea v-model="newTask.description" placeholder="توضیح کوتاه..." />
                 <div class="two-cols">
                     <span class="time-input modal-time-input"><input v-model="newTask.planned_start_time" type="time" aria-label="ساعت شروع" /><b>شروع</b></span>
@@ -2536,8 +2589,13 @@ onUnmounted(() => {
                         @dragend="draggedModalSubtaskIndex = null"
                     >
                         <b>{{ fa(index + 1) }}</b>
-                        <span>{{ subtask.title }}</span>
-                        <small>{{ subtask.planned_start_time || 'بدون شروع' }} تا {{ subtask.planned_end_time || 'بدون پایان' }} · {{ priorityLabel(subtask.priority) }}</small>
+                        <span class="modal-subtask-title">
+                            {{ subtask.title }}
+                            <button type="button" class="modal-subtask-edit" title="ویرایش زیروظیفه" aria-label="ویرایش زیروظیفه" @click="editModalSubtask(index)">
+                                <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg>
+                            </button>
+                        </span>
+                        <small>{{ modalSubtaskMeta(subtask) }}</small>
                         <div class="modal-subtask-move">
                             <button type="button" :disabled="index === 0" @click="moveModalSubtask(index, index - 1)">↑</button>
                             <button type="button" :disabled="index === modalSubtasks.length - 1" @click="moveModalSubtask(index, index + 1)">↓</button>
@@ -2561,7 +2619,7 @@ onUnmounted(() => {
                                     <option v-for="priority in priorities" :key="`modal-sub-priority-${priority.key}`" :value="priority.key">{{ priority.label }}</option>
                                 </select>
                             </label>
-                            <button type="button" class="subtask-add-btn" @click="addModalSubtask">افزودن زیروظیفه</button>
+                            <button type="button" class="subtask-add-btn" @click="addModalSubtask">{{ editingModalSubtaskIndex === null ? 'افزودن زیروظیفه' : 'ویرایش زیروظیفه' }}</button>
                         </div>
                     </div>
                 </div>

@@ -1414,14 +1414,15 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 22px;
-    padding: 2px 8px;
-    border: 1.5px solid currentColor;
+    min-height: 18px;
+    padding: 1px 7px;
+    border: 1px solid currentColor;
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 9.5px;
     font-weight: 900;
     line-height: 1.2;
     white-space: nowrap;
+    opacity: .9;
 }
 .task-group-pill {
     display: inline-flex;
@@ -4248,6 +4249,9 @@ body {
     font-style: normal;
     line-height: 1;
     white-space: nowrap;
+    max-width: 86px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .task-time-chip.live {
@@ -8159,6 +8163,36 @@ body {
     font-size: 12.5px;
 }
 
+.modal-subtask-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.modal-subtask-edit {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    border: 0 !important;
+    background: transparent !important;
+    color: #8a7a5d !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+}
+
+.modal-subtask-edit svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .modal-subtask-item button {
     border: 0;
     background: transparent;
@@ -8191,9 +8225,26 @@ body {
     min-width: 0;
 }
 
-.task-modal-card .task-group-select {
-    border-color: #d63384;
-    background: linear-gradient(90deg, #fff, #fff7fb);
+.task-group-picker {
+    display: grid;
+    gap: 8px;
+}
+
+.task-modal-card .task-group-select,
+.task-modal-card .task-group-search {
+    border-color: #eadfbe;
+    background: #fff;
+}
+
+.task-modal-card .task-group-search {
+    height: 40px;
+    font-size: 13px;
+}
+
+.task-group-picker small {
+    color: #9a8b6a;
+    font-size: 11px;
+    font-weight: 800;
 }
 
 .modal-subtasks-head {
@@ -8443,7 +8494,7 @@ body {
 
 .subtask-meta-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, .9fr) auto;
     gap: 8px;
     align-items: end;
 }
@@ -8466,11 +8517,31 @@ body {
 
 .subtask-add-btn {
     width: auto !important;
-    min-width: 112px;
+    min-width: 108px;
     height: 34px !important;
-    padding: 0 12px !important;
+    padding: 0 10px !important;
     white-space: nowrap;
     font-size: 12px;
+}
+
+@media (max-width: 760px) {
+    .subtask-meta-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .subtask-meta-row label:last-of-type {
+        grid-column: 1 / -1;
+    }
+
+    .subtask-meta-row select {
+        height: 38px;
+        padding-inline: 12px 34px;
+    }
+
+    .subtask-add-btn {
+        grid-column: 1 / -1;
+        width: 100% !important;
+    }
 }
 
 .action-icon {
@@ -9236,6 +9307,10 @@ body {
         transform: none !important;
     }
 
+    .task-card.has-task-group {
+        padding-top: 64px;
+    }
+
     .task-content {
         min-width: 0;
     }
@@ -9603,6 +9678,10 @@ body {
         overflow: hidden;
     }
 
+    .task-card.has-task-group {
+        padding-top: 66px;
+    }
+
     .task-number {
         width: 22px;
         height: 22px;
@@ -9634,6 +9713,7 @@ body {
     .task-time-chip em {
         font-size: 9px;
         min-width: 0;
+        max-width: 100%;
     }
 
     .task-title {
