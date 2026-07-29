@@ -9,7 +9,7 @@ const router = useRouter();
 const publicRoutes = ['/', '/login', '/register'];
 
 function isPublicRoute(path: string) {
-    return publicRoutes.includes(path) || path.startsWith('/shared-notes/');
+    return publicRoutes.includes(path) || path.startsWith('/s/') || path.startsWith('/shared-notes/');
 }
 
 function normalizeDigits(value: string) {

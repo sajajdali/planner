@@ -23,6 +23,7 @@ export default createRouter({
         { path: '/group-tasks', component: GroupTasksPage },
         { path: '/finance', component: FinanceManagementPage },
         { path: '/notes', component: NotesLibraryPage },
+        { path: '/s/:token', component: SharedNotePage },
         { path: '/shared-notes/:token', component: SharedNotePage },
         { path: '/reports/monthly', component: MonthlyReportPage },
         { path: '/settings', component: SettingsPage },

@@ -1982,7 +1982,7 @@ class PlannerController extends Controller
     {
         abort_unless($note->user_id === $request->user()->id, 404);
 
-        if (! $note->share_token) {
+        if (! $note->share_token || strlen($note->share_token) > 6) {
             $note->forceFill(['share_token' => $this->newNotebookShareToken()])->save();
         }
 
@@ -2048,7 +2048,7 @@ class PlannerController extends Controller
     private function newNotebookShareToken(): string
     {
         do {
-            $token = Str::random(40);
+            $token = Str::random(6);
         } while (NotebookNote::where('share_token', $token)->exists());
 
         return $token;

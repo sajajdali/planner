@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import QRCode from 'qrcode';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
 
@@ -19,6 +20,7 @@ const groupModal = ref(false);
 const noteModal = ref(false);
 const viewNote = ref<NoteItem | null>(null);
 const fullScreenCode = ref(false);
+const shareModal = ref<{ note: NoteItem; url: string; qr: string } | null>(null);
 const deleteConfirm = ref<{ title: string; message: string; run: () => Promise<void> } | null>(null);
 const groupForm = ref<GroupForm>({ id: null, name: '', color: '#FF6FA5', icon: 'text' });
 const noteForm = ref<NoteForm>({ id: null, groupId: '', title: '', content: '', content_type: 'text', language: 'javascript', is_important: false });
@@ -161,7 +163,7 @@ async function saveNote() {
     showToast(noteForm.value.id ? 'یادداشت ویرایش شد' : 'یادداشت اضافه شد');
 }
 
-async function copyText(text: string) {
+async function copyText(text: string, message = 'کپی شد') {
     try {
         await navigator.clipboard.writeText(text);
     } catch {
@@ -172,11 +174,11 @@ async function copyText(text: string) {
         document.execCommand('copy');
         area.remove();
     }
-    showToast('کپی شد');
+    showToast(message);
 }
 
 function sharedNoteUrl(note: NoteItem) {
-    return note.share_token ? `${window.location.origin}/shared-notes/${note.share_token}` : '';
+    return note.share_token ? `${window.location.origin}/s/${note.share_token}` : '';
 }
 
 function replaceNote(note: NoteItem) {
@@ -189,14 +191,28 @@ function replaceNote(note: NoteItem) {
 
 async function shareNote(note: NoteItem) {
     let shareable = note;
-    if (!shareable.share_token) {
+    if (!shareable.share_token || shareable.share_token.length > 6) {
         const { data } = await api.post(`/notebook-notes/${note.id}/share`);
         shareable = data;
         replaceNote(shareable);
     }
 
-    await copyText(sharedNoteUrl(shareable));
-    showToast('لینک اختصاصی کپی شد');
+    const url = sharedNoteUrl(shareable);
+    const qr = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 220,
+        color: {
+            dark: '#3a2e1f',
+            light: '#ffffff',
+        },
+    });
+    shareModal.value = { note: shareable, url, qr };
+}
+
+async function copyShareLink() {
+    if (!shareModal.value) return;
+    await copyText(shareModal.value.url, 'لینک در کلیپ‌بورد شما کپی شد');
 }
 
 function askDeleteNote(note: NoteItem) {
@@ -311,6 +327,27 @@ onMounted(load);
 
         <div v-if="toast" class="toast">{{ toast }}</div>
 
+        <div v-if="shareModal" class="modal-backdrop share-backdrop" @click.self="shareModal = null">
+            <section class="notes-modal share-note-modal">
+                <button class="share-close" type="button" aria-label="بستن" @click="shareModal = null">×</button>
+                <div class="share-modal-head">
+                    <span>share</span>
+                    <strong>{{ shareModal.note.title }}</strong>
+                </div>
+                <div class="qr-frame">
+                    <img :src="shareModal.qr" alt="QR code" />
+                </div>
+                <label class="share-link-box">
+                    <span>لینک کوتاه</span>
+                    <input :value="shareModal.url" readonly dir="ltr" @focus="($event.target as HTMLInputElement).select()" />
+                </label>
+                <button class="share-copy-btn" type="button" @click="copyShareLink">
+                    <svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 012-2h10"></path></svg>
+                    کپی لینک
+                </button>
+            </section>
+        </div>
+
         <div v-if="groupModal" class="modal-backdrop">
             <form class="notes-modal group-modal" @submit.prevent="saveGroup">
                 <h2>{{ groupForm.id ? 'ویرایش گروه' : 'گروه جدید' }}</h2>
@@ -396,5 +433,6 @@ onMounted(load);
 .note-card p{white-space:pre-wrap;max-height:88px!important}
 .share-icon-btn,.fullscreen-share-btn{width:auto!important;min-width:72px!important;height:34px!important;padding:0 10px!important;border:1.5px solid #3a2e1f!important;border-radius:10px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;background:#fff!important;color:#3a2e1f!important;box-shadow:2px 2px 0 #3a2e1f!important;font-size:12px!important;font-weight:900!important;line-height:1!important;transform:none!important}.share-icon-btn:hover,.fullscreen-share-btn:hover{background:#fff8e8!important;transform:none!important}.share-icon-btn svg,.fullscreen-share-btn svg{display:block!important;width:15px!important;height:15px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.3!important;stroke-linecap:round!important;stroke-linejoin:round!important}.share-icon-btn span,.fullscreen-share-btn span,.code-fullscreen header .share-icon-btn span{display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;color:inherit!important;font-family:Vazirmatn,sans-serif!important;font-size:12px!important;font-weight:900!important;line-height:1!important;white-space:nowrap!important}
 .view-modal header .share-icon-btn{height:30px!important;min-height:30px!important}
+.share-backdrop{z-index:10000!important;background:rgba(23,19,33,.68)!important;backdrop-filter:blur(3px)}.share-note-modal{position:relative!important;width:340px!important;max-width:calc(100vw - 32px)!important;display:grid;gap:14px;overflow:visible!important;padding:22px!important;text-align:center}.share-close{position:absolute;top:12px;left:12px;width:30px!important;height:30px!important;min-width:0!important;border:2px solid #3a2e1f!important;border-radius:9px!important;background:#fff!important;color:#3a2e1f!important;font-size:18px!important;font-weight:900!important;box-shadow:2px 2px 0 #3a2e1f!important;cursor:pointer}.share-modal-head{display:grid;gap:6px;padding:2px 34px 0}.share-modal-head span{justify-self:center;padding:3px 12px;border:1.5px solid #3a2e1f;border-radius:999px;background:#ffd93d;color:#3a2e1f;font-size:11px;font-weight:900;box-shadow:1px 1px 0 #3a2e1f}.share-modal-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3a2e1f;font-size:16px;font-weight:900}.qr-frame{justify-self:center;padding:12px;border:2px solid #3a2e1f;border-radius:18px;background:#fff;box-shadow:4px 4px 0 #3a2e1f}.qr-frame img{display:block;width:190px;height:190px}.share-link-box{display:grid!important;gap:6px!important;margin:0!important;text-align:right!important}.share-link-box span{color:#8a4b1e!important;font-size:11px!important;font-weight:900!important}.share-link-box input{height:38px!important;border:2px solid #efe3c4!important;border-radius:11px!important;background:#fff!important;color:#3a2e1f!important;text-align:left!important;font-family:"JetBrains Mono",monospace!important;font-size:12px!important;font-weight:800!important}.share-copy-btn{height:40px;border:2px solid #3a2e1f;border-radius:12px;background:#22d3d0;color:#0b4a48;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:900;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.share-copy-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
 @media(max-width:700px){.notes-page{padding:24px 10px 80px}.notes-sheet{padding:24px 14px 28px;transform:none}.notes-header{align-items:flex-start}.notes-heading{width:100%;flex-wrap:wrap}.notes-heading>div:last-child{width:100%}h1{font-size:25px}.add-group-btn{width:100%;justify-content:center}.note-grid{grid-template-columns:1fr}.note-group-head{gap:8px;padding:12px}.note-group-head strong{font-size:18px}.group-action{width:28px;height:28px}.notes-modal{padding:18px}.modal-backdrop{align-items:flex-start;overflow:auto}.view-modal header{align-items:flex-start;flex-wrap:wrap}.view-modal header h2{width:100%;font-size:20px}.code-fullscreen header{align-items:flex-start;flex-wrap:wrap;padding:10px}.code-fullscreen header>div{width:100%;flex:1 0 100%}.code-fullscreen button{flex:1}.fullscreen-code{padding:16px 12px;font-size:12.5px;line-height:1.8}.fullscreen-text{width:calc(100vw - 20px);margin:12px auto;padding:18px 16px;font-size:15px;line-height:2}}
 </style>
