@@ -1827,10 +1827,17 @@ class PlannerController extends Controller
     public function toggleFollowUp(Request $request, FollowUp $followUp)
     {
         abort_unless($followUp->user_id === $request->user()->id, 404);
+        $data = $request->validate([
+            'result_note' => ['nullable', 'string', 'max:2000'],
+        ]);
         $done = $followUp->status !== 'done';
-        $followUp->update(['status' => $done ? 'done' : 'pending', 'completed_at' => $done ? now() : null]);
+        $followUp->update([
+            'status' => $done ? 'done' : 'pending',
+            'completed_at' => $done ? now() : null,
+            ...(array_key_exists('result_note', $data) ? ['result_note' => $data['result_note'] ?? ''] : []),
+        ]);
 
-        return $followUp;
+        return $followUp->fresh();
     }
 
     public function updateFollowUp(Request $request, FollowUp $followUp)

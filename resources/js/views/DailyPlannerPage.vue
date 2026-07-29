@@ -35,7 +35,7 @@ type Task = {
     time_sessions: TimeSession[];
     subtasks: Task[];
 };
-type FollowUp = { id: number; title: string; person_name: string | null; follow_up_time: string | null; status: string };
+type FollowUp = { id: number; title: string; person_name: string | null; follow_up_time: string | null; status: string; result_note: string | null };
 type FollowUpDraft = { title: string; person_name: string; follow_up_time: string };
 type SubtaskDraft = { id?: number; title: string; planned_start_time: string; planned_end_time: string; priority: string };
 type DueNotification = { id: string; kind: 'task' | 'subtask' | 'follow' | 'meal'; title: string; time: string; meta: string; targetId: string; color: string; softColor: string; category_id?: number };
@@ -85,6 +85,8 @@ const mealDrafts = ref<Record<number, { title: string; meal_time: string; meal_t
 const editingMealId = ref<number | null>(null);
 const followDrafts = ref<Record<number, FollowUpDraft>>({});
 const editingFollowUpId = ref<number | null>(null);
+const followResultModal = ref<{ followUp: FollowUp; result_note: string } | null>(null);
+const followResultView = ref<FollowUp | null>(null);
 const activeTimer = ref<ActiveTimer | null>(null);
 const nowTick = ref(Date.now());
 let timerInterval: number | undefined;
@@ -1409,10 +1411,26 @@ async function createFollowUp() {
     syncFollowDraft(data);
 }
 
-async function toggleFollowUp(id: number) {
-    const { data } = await api.post(`/follow-ups/${id}/toggle`);
-    followUps.value = followUps.value.map((followUp) => followUp.id === id ? data : followUp);
+function toggleFollowUp(followUp: FollowUp) {
+    if (followUp.status !== 'done') {
+        followResultModal.value = { followUp, result_note: followUp.result_note ?? '' };
+        return;
+    }
+
+    updateFollowStatus(followUp, 'pending');
+}
+
+async function updateFollowStatus(followUp: FollowUp, status: 'done' | 'pending', resultNote?: string) {
+    const { data } = await api.post(`/follow-ups/${followUp.id}/toggle`, status === 'done' ? { result_note: resultNote ?? '' } : {});
+    followUps.value = followUps.value.map((item) => item.id === followUp.id ? data : item);
+    if (followResultView.value?.id === followUp.id) followResultView.value = data;
     syncFollowDraft(data);
+}
+
+async function completeFollowUpWithResult() {
+    if (!followResultModal.value) return;
+    await updateFollowStatus(followResultModal.value.followUp, 'done', followResultModal.value.result_note.trim());
+    followResultModal.value = null;
 }
 
 async function updateFollowUp(followUp: FollowUp) {
@@ -2277,7 +2295,7 @@ onUnmounted(() => {
                             <button @click="createFollowUp">افزودن</button>
                         </div>
                         <div v-for="followUp in followUps" :id="`follow-${followUp.id}`" :key="followUp.id" class="follow-item" :class="{ done: followUp.status === 'done' }">
-                            <button class="check-btn" :class="{ checked: followUp.status === 'done' }" @click="toggleFollowUp(followUp.id)">✓</button>
+                            <button class="check-btn" :class="{ checked: followUp.status === 'done' }" @click="toggleFollowUp(followUp)">✓</button>
                             <div v-if="editingFollowUpId !== followUp.id" class="follow-summary"><strong>{{ followUp.title }}</strong><span>{{ followUp.person_name || 'بدون شخص' }} · {{ followUp.follow_up_time || 'بدون ساعت' }}</span></div>
                             <div v-else class="follow-edit-grid">
                                 <input v-model="followDrafts[followUp.id].title" placeholder="عنوان" @keyup.enter="updateFollowUp(followUp)" />
@@ -2288,6 +2306,9 @@ onUnmounted(() => {
                                 </button>
                             </div>
                             <div class="micro-actions">
+                                <button v-if="followUp.result_note" class="micro-icon result" title="مشاهده نتیجه تماس" aria-label="مشاهده نتیجه تماس" @click="followResultView = followUp">
+                                    <svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>
+                                </button>
                                 <button v-if="editingFollowUpId !== followUp.id" class="micro-icon edit" title="ویرایش پیگیری" aria-label="ویرایش پیگیری" @click="editingFollowUpId = followUp.id">
                                     <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16z"></path><path d="M13 7l4 4"></path></svg>
                                 </button>
@@ -2671,6 +2692,30 @@ onUnmounted(() => {
                 <div class="description-icon">i</div>
                 <h2>{{ descriptionModalTask.title }}</h2>
                 <p>{{ descriptionModalTask.description }}</p>
+            </section>
+        </div>
+
+        <div v-if="followResultModal" class="modal-backdrop">
+            <form class="modal-card follow-result-modal" @submit.prevent="completeFollowUpWithResult">
+                <button type="button" class="description-close" aria-label="بستن" @click="followResultModal = null">×</button>
+                <div class="description-icon">✓</div>
+                <h2>{{ followResultModal.followUp.title }}</h2>
+                <p>{{ followResultModal.followUp.person_name || 'بدون شخص' }} · {{ followResultModal.followUp.follow_up_time || 'بدون ساعت' }}</p>
+                <textarea v-model="followResultModal.result_note" placeholder="نتیجه تماس را بنویس..." rows="5" autofocus></textarea>
+                <div class="modal-actions">
+                    <button type="button" @click="followResultModal = null">انصراف</button>
+                    <button type="submit">ثبت نتیجه</button>
+                </div>
+            </form>
+        </div>
+
+        <div v-if="followResultView" class="modal-backdrop">
+            <section class="modal-card follow-result-modal view">
+                <button type="button" class="description-close" aria-label="بستن" @click="followResultView = null">×</button>
+                <div class="description-icon">i</div>
+                <h2>{{ followResultView.title }}</h2>
+                <p>{{ followResultView.person_name || 'بدون شخص' }} · {{ followResultView.follow_up_time || 'بدون ساعت' }}</p>
+                <article>{{ followResultView.result_note || 'نتیجه‌ای ثبت نشده است.' }}</article>
             </section>
         </div>
 

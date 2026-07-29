@@ -3444,6 +3444,56 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     white-space: pre-wrap;
 }
 
+.follow-result-modal.modal-card {
+    width: min(460px, 100%);
+    position: relative;
+    gap: 10px;
+    padding: 26px 24px 24px;
+    border: 2px solid #3a2e1f;
+    border-radius: 20px;
+    background: #fffbf0;
+    box-shadow: 5px 5px 0 #22d3d0, 0 24px 50px rgba(0, 0, 0, .2);
+    text-align: right;
+}
+
+.follow-result-modal h2 {
+    margin: 4px 0 0;
+    color: #3a2e1f;
+    font-size: 18px;
+    line-height: 1.8;
+}
+
+.follow-result-modal p {
+    margin: 0;
+    color: #9a8b6a;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.follow-result-modal textarea,
+.follow-result-modal article {
+    width: 100%;
+    min-height: 132px;
+    padding: 14px 16px;
+    border: 1.5px dashed #d7c9a8;
+    border-radius: 14px;
+    background: #fff;
+    color: #4b3b22;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 2;
+    white-space: pre-wrap;
+}
+
+.follow-result-modal textarea {
+    resize: vertical;
+    outline: none;
+}
+
+.follow-result-modal.view article {
+    margin-top: 4px;
+}
+
 .task-card.done {
     opacity: .34 !important;
     background: #f1f3ec !important;
@@ -7022,6 +7072,11 @@ body {
 .micro-icon.save {
     color: #15803d;
     background: #dcfce7;
+}
+
+.micro-icon.result {
+    color: #8a4b1e;
+    background: #fff7d6;
 }
 
 .micro-icon.danger {
