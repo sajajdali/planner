@@ -15,6 +15,7 @@ Route::prefix('api')->group(function () {
     Route::post('/phone-login', [AuthController::class, 'phoneLogin'])->middleware('guest');
     Route::post('/phone-register', [AuthController::class, 'phoneRegister'])->middleware('guest');
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth');
+    Route::get('/shared-notes/{token}', [PlannerController::class, 'publicNotebookNote']);
 
     Route::middleware('auth')->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
@@ -98,6 +99,7 @@ Route::prefix('api')->group(function () {
         Route::delete('/notebook-note-groups/{group}', [PlannerController::class, 'destroyNotebookNoteGroup']);
         Route::post('/notebook-notes', [PlannerController::class, 'storeNotebookNote']);
         Route::put('/notebook-notes/{note}', [PlannerController::class, 'updateNotebookNote']);
+        Route::post('/notebook-notes/{note}/share', [PlannerController::class, 'shareNotebookNote']);
         Route::delete('/notebook-notes/{note}', [PlannerController::class, 'destroyNotebookNote']);
     });
 });

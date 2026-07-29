@@ -5405,6 +5405,51 @@ body {
     text-decoration: line-through;
 }
 
+.simple-task-table tr.running {
+    background: #fff3e0;
+    box-shadow: inset 4px 0 0 #ff8a3d, inset 0 -1px 0 #f0c48a;
+}
+
+.simple-task-table tr.running td strong {
+    color: #c2410c;
+}
+
+.simple-task-table tr.paused {
+    background: #fffaf0;
+    box-shadow: inset 4px 0 0 #d6a84f, inset 0 -1px 0 #ead6a5;
+}
+
+.table-time-cell {
+    display: grid;
+    gap: 5px;
+    justify-items: start;
+}
+
+.table-time-cell > span {
+    white-space: nowrap;
+}
+
+.table-live-timer {
+    min-width: 80px;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 11px;
+}
+
+.table-timer-paused {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border: 1px solid #d6a84f;
+    border-radius: 999px;
+    background: #fff8e8;
+    color: #8a5a10;
+    font-size: 10.5px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
 .table-subtasks-row td {
     padding: 8px 42px 12px 42px;
     border-bottom: 0;

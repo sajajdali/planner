@@ -16,6 +16,7 @@ class NotebookNote extends Model
         'language',
         'is_important',
         'sort_order',
+        'share_token',
     ];
 
     protected function casts(): array

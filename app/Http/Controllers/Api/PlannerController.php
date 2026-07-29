@@ -31,6 +31,7 @@ use App\Models\TaskTimeSession;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class PlannerController extends Controller
@@ -1952,6 +1953,7 @@ class PlannerController extends Controller
             ...$data,
             'user_id' => $request->user()->id,
             'sort_order' => $sortOrder,
+            'share_token' => $this->newNotebookShareToken(),
         ]);
 
         return $this->notebookNotePayload($note);
@@ -1974,6 +1976,24 @@ class PlannerController extends Controller
         $note->delete();
 
         return response()->noContent();
+    }
+
+    public function shareNotebookNote(Request $request, NotebookNote $note)
+    {
+        abort_unless($note->user_id === $request->user()->id, 404);
+
+        if (! $note->share_token) {
+            $note->forceFill(['share_token' => $this->newNotebookShareToken()])->save();
+        }
+
+        return $this->notebookNotePayload($note->fresh());
+    }
+
+    public function publicNotebookNote(string $token)
+    {
+        $note = NotebookNote::where('share_token', $token)->firstOrFail();
+
+        return $this->notebookNotePayload($note);
     }
 
     private function validateNotebookNote(Request $request): array
@@ -2020,8 +2040,18 @@ class PlannerController extends Controller
             'language' => $note->language,
             'is_important' => (bool) $note->is_important,
             'sort_order' => $note->sort_order,
+            'share_token' => $note->share_token,
             'updated_at' => $note->updated_at?->toISOString(),
         ];
+    }
+
+    private function newNotebookShareToken(): string
+    {
+        do {
+            $token = Str::random(40);
+        } while (NotebookNote::where('share_token', $token)->exists());
+
+        return $token;
     }
 
     private function taskPayload(Task $task): array

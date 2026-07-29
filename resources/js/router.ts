@@ -9,6 +9,7 @@ import MonthlyReportPage from './views/MonthlyReportPage.vue';
 import NotesLibraryPage from './views/NotesLibraryPage.vue';
 import ProfilePage from './views/ProfilePage.vue';
 import SettingsPage from './views/SettingsPage.vue';
+import SharedNotePage from './views/SharedNotePage.vue';
 import SupportAdminPage from './views/SupportAdminPage.vue';
 
 export default createRouter({
@@ -22,6 +23,7 @@ export default createRouter({
         { path: '/group-tasks', component: GroupTasksPage },
         { path: '/finance', component: FinanceManagementPage },
         { path: '/notes', component: NotesLibraryPage },
+        { path: '/shared-notes/:token', component: SharedNotePage },
         { path: '/reports/monthly', component: MonthlyReportPage },
         { path: '/settings', component: SettingsPage },
         { path: '/profile', component: ProfilePage },

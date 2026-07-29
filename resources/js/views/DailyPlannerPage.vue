@@ -1878,7 +1878,7 @@ onUnmounted(() => {
                                     </thead>
                                     <tbody>
                                         <template v-for="(task, index) in tableCategoryTasks(category.id)" :key="`row-group-${task.id}`">
-                                            <tr :class="{ done: task.status === 'done', referred: isReferred(task), 'has-subtasks': task.subtasks.length }">
+                                            <tr :class="{ done: task.status === 'done', referred: isReferred(task), running: isTaskTimerRunning(task), paused: isTaskTimerPaused(task), 'has-subtasks': task.subtasks.length }">
                                                 <td>{{ fa(index + 1) }}</td>
                                                 <td class="table-task-title">
                                                     <button class="check-btn table-task-check" :class="{ checked: task.status === 'done' }" aria-label="تغییر وضعیت وظیفه" @click.stop="toggleTask(task)">✓</button>
@@ -1887,7 +1887,13 @@ onUnmounted(() => {
                                                     <small v-if="task.description">{{ task.description }}</small>
                                                     <button v-if="task.description" class="info-icon table-info" title="مشاهده توضیحات" aria-label="مشاهده توضیحات" @click.stop="openDescriptionModal(task)">i</button>
                                                 </td>
-                                                <td>{{ task.planned_start_time ? `${task.planned_start_time} تا ${task.planned_end_time || '--:--'}` : 'بدون زمان' }}</td>
+                                                <td>
+                                                    <div class="table-time-cell">
+                                                        <span>{{ task.planned_start_time ? `${task.planned_start_time} تا ${task.planned_end_time || '--:--'}` : 'بدون زمان' }}</span>
+                                                        <b v-if="isTaskTimerRunning(task)" class="live-timer table-live-timer"><i></i>{{ timeLabel(taskTotalSeconds(task)) }}</b>
+                                                        <b v-else-if="isTaskTimerPaused(task)" class="table-timer-paused">متوقف: {{ timeLabel(taskTotalSeconds(task)) }}</b>
+                                                    </div>
+                                                </td>
                                                 <td><span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span></td>
                                                 <td>{{ task.subtasks.length ? `${fa(task.subtasks.filter(s => s.status === 'done').length)} از ${fa(task.subtasks.length)}` : '-' }}</td>
                                                 <td>{{ task.status === 'done' ? 'انجام شده' : task.status === 'in_progress' ? 'در حال انجام' : 'مانده' }}</td>
