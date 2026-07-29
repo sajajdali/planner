@@ -314,7 +314,7 @@ onMounted(load);
             </form>
         </div>
 
-        <div v-if="viewNote" class="modal-backdrop">
+        <div v-if="viewNote && !fullScreenCode" class="modal-backdrop">
             <section class="notes-modal view-modal">
                 <header>
                     <h2>{{ viewNote.title }}</h2>
