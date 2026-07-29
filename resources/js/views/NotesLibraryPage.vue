@@ -291,7 +291,6 @@ onMounted(load);
             <form class="notes-modal group-modal" @submit.prevent="saveGroup">
                 <h2>{{ groupForm.id ? 'ویرایش گروه' : 'گروه جدید' }}</h2>
                 <label>نام گروه<input v-model="groupForm.name" placeholder="مثلاً: قالب‌های پیام" required /></label>
-                <label>نوع گروه<select v-model="groupForm.icon"><option value="text">متن</option><option value="code">کد</option><option value="terminal">ترمینال</option></select></label>
                 <div class="color-picker">
                     <button v-for="color in colors" :key="color" type="button" :class="{ active: groupForm.color === color }" :style="{ background: color }" @click="groupForm.color = color"></button>
                 </div>
