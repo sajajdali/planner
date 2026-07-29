@@ -1422,6 +1422,9 @@ class PlannerController extends Controller
             'follow_up_date' => ['required', 'date'],
             'follow_up_time' => ['nullable', 'date_format:H:i'],
             'person_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'url' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'priority' => ['nullable', Rule::in($priorityKeys)],
         ]);
 
@@ -1847,7 +1850,11 @@ class PlannerController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'person_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'url' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'follow_up_time' => ['nullable', 'date_format:H:i'],
+            'result_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $followUp->update($data);

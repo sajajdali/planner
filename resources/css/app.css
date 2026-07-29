@@ -5830,9 +5830,20 @@ body {
     min-width: 0;
 }
 
+.follow-summary small {
+    display: block;
+    color: #8f7957;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .follow-edit-grid {
     display: grid !important;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(126px, .45fr) 30px;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(126px, .45fr) 30px;
     align-items: center;
     gap: 6px !important;
     min-width: 0;
@@ -9296,7 +9307,9 @@ body {
     .meal-form button,
     .meal-edit-grid input[placeholder='یادداشت'],
     .follow-edit-grid input:first-child,
-    .follow-edit-grid input:nth-child(2) {
+    .follow-edit-grid input:nth-child(2),
+    .follow-edit-grid input[placeholder='جزئیات تماس'],
+    .follow-edit-grid input[placeholder='نتیجه تماس'] {
         grid-column: 1 / -1;
     }
 
