@@ -92,5 +92,12 @@ Route::prefix('api')->group(function () {
         Route::post('/routine-items/{routineItem}/toggle', [PlannerController::class, 'toggleRoutineItem']);
         Route::delete('/routine-items/{routineItem}', [PlannerController::class, 'destroyRoutineItem']);
         Route::post('/daily-reviews', [PlannerController::class, 'review']);
+        Route::get('/notebook-notes', [PlannerController::class, 'notebookNotes']);
+        Route::post('/notebook-note-groups', [PlannerController::class, 'storeNotebookNoteGroup']);
+        Route::put('/notebook-note-groups/{group}', [PlannerController::class, 'updateNotebookNoteGroup']);
+        Route::delete('/notebook-note-groups/{group}', [PlannerController::class, 'destroyNotebookNoteGroup']);
+        Route::post('/notebook-notes', [PlannerController::class, 'storeNotebookNote']);
+        Route::put('/notebook-notes/{note}', [PlannerController::class, 'updateNotebookNote']);
+        Route::delete('/notebook-notes/{note}', [PlannerController::class, 'destroyNotebookNote']);
     });
 });

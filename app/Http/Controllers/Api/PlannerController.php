@@ -20,6 +20,8 @@ use App\Models\GoalProgressLog;
 use App\Models\GroupTaskItem;
 use App\Models\GroupTaskProject;
 use App\Models\MealEntry;
+use App\Models\NotebookNote;
+use App\Models\NotebookNoteGroup;
 use App\Models\PrioritySetting;
 use App\Models\RoutineItem;
 use App\Models\SupportTicket;
@@ -1874,6 +1876,152 @@ class PlannerController extends Controller
             ->where('user_id', $request->user()->id)
             ->whereDate('review_date', $data['review_date'])
             ->first();
+    }
+
+    public function notebookNotes(Request $request)
+    {
+        $userId = $request->user()->id;
+
+        $groups = NotebookNoteGroup::query()
+            ->where('user_id', $userId)
+            ->with(['notes' => fn ($query) => $query->where('user_id', $userId)->orderBy('sort_order')->latest()])
+            ->orderBy('sort_order')
+            ->latest()
+            ->get();
+
+        return [
+            'groups' => $groups->map(fn (NotebookNoteGroup $group) => $this->notebookGroupPayload($group))->values(),
+        ];
+    }
+
+    public function storeNotebookNoteGroup(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:80'],
+            'color' => ['nullable', 'string', 'max:20'],
+            'icon' => ['nullable', Rule::in(['text', 'code', 'terminal'])],
+        ]);
+
+        $sortOrder = NotebookNoteGroup::where('user_id', $request->user()->id)->max('sort_order') + 1;
+
+        $group = NotebookNoteGroup::create([
+            'user_id' => $request->user()->id,
+            'name' => trim($data['name']),
+            'color' => $data['color'] ?? '#9B5DE5',
+            'icon' => $data['icon'] ?? 'text',
+            'sort_order' => $sortOrder,
+        ]);
+
+        return $this->notebookGroupPayload($group->load('notes'));
+    }
+
+    public function updateNotebookNoteGroup(Request $request, NotebookNoteGroup $group)
+    {
+        abort_unless($group->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:80'],
+            'color' => ['nullable', 'string', 'max:20'],
+            'icon' => ['nullable', Rule::in(['text', 'code', 'terminal'])],
+        ]);
+
+        $group->update([
+            'name' => trim($data['name']),
+            'color' => $data['color'] ?? $group->color,
+            'icon' => $data['icon'] ?? $group->icon,
+        ]);
+
+        return $this->notebookGroupPayload($group->fresh('notes'));
+    }
+
+    public function destroyNotebookNoteGroup(Request $request, NotebookNoteGroup $group)
+    {
+        abort_unless($group->user_id === $request->user()->id, 404);
+        $group->delete();
+
+        return response()->noContent();
+    }
+
+    public function storeNotebookNote(Request $request)
+    {
+        $data = $this->validateNotebookNote($request);
+        $group = NotebookNoteGroup::where('user_id', $request->user()->id)->findOrFail($data['notebook_note_group_id']);
+        $sortOrder = NotebookNote::where('user_id', $request->user()->id)->where('notebook_note_group_id', $group->id)->max('sort_order') + 1;
+
+        $note = NotebookNote::create([
+            ...$data,
+            'user_id' => $request->user()->id,
+            'sort_order' => $sortOrder,
+        ]);
+
+        return $this->notebookNotePayload($note);
+    }
+
+    public function updateNotebookNote(Request $request, NotebookNote $note)
+    {
+        abort_unless($note->user_id === $request->user()->id, 404);
+        $data = $this->validateNotebookNote($request);
+        NotebookNoteGroup::where('user_id', $request->user()->id)->findOrFail($data['notebook_note_group_id']);
+
+        $note->update($data);
+
+        return $this->notebookNotePayload($note->fresh());
+    }
+
+    public function destroyNotebookNote(Request $request, NotebookNote $note)
+    {
+        abort_unless($note->user_id === $request->user()->id, 404);
+        $note->delete();
+
+        return response()->noContent();
+    }
+
+    private function validateNotebookNote(Request $request): array
+    {
+        $data = $request->validate([
+            'notebook_note_group_id' => ['required', 'integer'],
+            'title' => ['required', 'string', 'max:160'],
+            'content' => ['nullable', 'string'],
+            'content_type' => ['required', Rule::in(['text', 'code'])],
+            'language' => ['nullable', 'string', 'max:40'],
+            'is_important' => ['nullable', 'boolean'],
+        ]);
+
+        $data['title'] = trim($data['title']);
+        $data['content'] = $data['content'] ?? '';
+        $data['language'] = $data['content_type'] === 'code' ? ($data['language'] ?? 'javascript') : null;
+        $data['is_important'] = (bool) ($data['is_important'] ?? false);
+
+        return $data;
+    }
+
+    private function notebookGroupPayload(NotebookNoteGroup $group): array
+    {
+        return [
+            'id' => $group->id,
+            'name' => $group->name,
+            'color' => $group->color,
+            'icon' => $group->icon,
+            'sort_order' => $group->sort_order,
+            'notes' => $group->relationLoaded('notes')
+                ? $group->notes->map(fn (NotebookNote $note) => $this->notebookNotePayload($note))->values()
+                : [],
+        ];
+    }
+
+    private function notebookNotePayload(NotebookNote $note): array
+    {
+        return [
+            'id' => $note->id,
+            'notebook_note_group_id' => $note->notebook_note_group_id,
+            'title' => $note->title,
+            'content' => $note->content ?? '',
+            'content_type' => $note->content_type,
+            'language' => $note->language,
+            'is_important' => (bool) $note->is_important,
+            'sort_order' => $note->sort_order,
+            'updated_at' => $note->updated_at?->toISOString(),
+        ];
     }
 
     private function taskPayload(Task $task): array

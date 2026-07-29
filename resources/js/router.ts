@@ -6,6 +6,7 @@ import GoalsPage from './views/GoalsPage.vue';
 import GroupTasksPage from './views/GroupTasksPage.vue';
 import LandingPage from './views/LandingPage.vue';
 import MonthlyReportPage from './views/MonthlyReportPage.vue';
+import NotesLibraryPage from './views/NotesLibraryPage.vue';
 import ProfilePage from './views/ProfilePage.vue';
 import SettingsPage from './views/SettingsPage.vue';
 import SupportAdminPage from './views/SupportAdminPage.vue';
@@ -20,6 +21,7 @@ export default createRouter({
         { path: '/goals', component: GoalsPage },
         { path: '/group-tasks', component: GroupTasksPage },
         { path: '/finance', component: FinanceManagementPage },
+        { path: '/notes', component: NotesLibraryPage },
         { path: '/reports/monthly', component: MonthlyReportPage },
         { path: '/settings', component: SettingsPage },
         { path: '/profile', component: ProfilePage },

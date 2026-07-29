@@ -129,6 +129,7 @@ const reviewSubmitted = ref(false);
 const savedReviewScore = ref<number | null>(null);
 const viewMode = ref<'notebook' | 'table' | 'trello'>('notebook');
 const viewMenuOpen = ref(false);
+const trelloFullscreen = ref(false);
 const tableStatusFilter = ref<'all' | 'pending' | 'done'>('all');
 const tableFilterOpen = ref(false);
 const tableCategoryFilter = ref('');
@@ -1922,96 +1923,103 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <section v-if="viewMode === 'trello'" class="trello-board-card">
-                        <div class="section-head">
-                            <strong>برد ترلو</strong>
-                            <span>{{ fa(tasks.length) }} کارت</span>
-                        </div>
-                        <div class="trello-board" dir="rtl">
-                            <section
-                                v-for="category in categories"
-                                :key="`trello-${category.id}`"
-                                class="trello-list"
-                                :style="{ '--c': category.color, '--soft': category.soft_color }"
-                            >
-                                <header class="trello-list-head">
-                                    <div>
-                                        <span></span>
-                                        <strong>{{ category.name }}</strong>
-                                    </div>
-                                    <small>{{ fa(categoryStats(category.id).done) }}/{{ fa(categoryStats(category.id).total) }}</small>
-                                </header>
-
-                                <div class="trello-cards">
-                                    <article
-                                        v-for="task in categoryTasks(category.id)"
-                                        :key="`trello-card-${task.id}`"
-                                        :id="`task-${task.id}`"
-                                        class="trello-card"
-                                        :class="{ done: task.status === 'done', dragging: draggedTaskId === task.id, running: isTaskTimerRunning(task), paused: isTaskTimerPaused(task), referred: isReferred(task) }"
-                                        draggable="true"
-                                        @dragstart="draggedTaskId = task.id"
-                                        @dragover.prevent
-                                        @drop="reorderTask(category.id, task.id)"
-                                        @dragend="draggedTaskId = null"
-                                    >
-                                        <div class="trello-card-labels">
-                                            <i :style="{ background: category.color }"></i>
-                                            <span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span>
-                                            <span v-if="taskGroupLabel(task)" class="task-group-pill" :style="taskGroupStyle(task)">{{ taskGroupLabel(task) }}</span>
-                                            <mark v-if="task.status === 'done'">انجام شد</mark>
-                                            <mark v-if="isReferred(task)" class="refer-text-badge" title="ارجاع داده شده">ارجاع شد</mark>
-                                            <button v-else class="refer-icon" title="ارجاع به روز دیگر" aria-label="ارجاع به روز دیگر" @click="openReferModal(task)"><svg viewBox="0 0 24 24"><path d="M7 17L17 7"></path><path d="M10 7h7v7"></path></svg></button>
-                                            <button v-if="task.description" class="info-icon" title="مشاهده توضیحات" aria-label="مشاهده توضیحات" @click="openDescriptionModal(task)">i</button>
-                                        </div>
-
-                                        <div class="trello-card-title">
-                                            <button class="check-btn" :class="{ checked: task.status === 'done' }" @click="toggleTask(task)">✓</button>
-                                            <strong>{{ task.title }}</strong>
-                                        </div>
-
-                                        <p>{{ task.planned_start_time ? `${task.planned_start_time} تا ${task.planned_end_time || ''}` : 'بدون زمان مشخص' }}</p>
-
-                                        <div v-if="task.subtasks.length" class="trello-checklist">
-                                            <div>
-                                                <span>{{ fa(task.subtasks.filter(s => s.status === 'done').length) }} از {{ fa(task.subtasks.length) }}</span>
-                                                <i :style="{ width: `${task.subtasks.length ? Math.round((task.subtasks.filter(s => s.status === 'done').length / task.subtasks.length) * 100) : 0}%` }"></i>
-                                            </div>
-                                            <button
-                                                v-for="subtask in task.subtasks"
-                                                :key="`trello-subtask-${subtask.id}`"
-                                                :id="`subtask-${subtask.id}`"
-                                                :class="{ done: subtask.status === 'done' }"
-                                                @click="toggleSubtask(subtask)"
-                                            >
-                                                <b></b>
-                                                <span>{{ subtask.title }}</span>
-                                            </button>
-                                        </div>
-
-                                        <div class="inline-subtask trello-inline-subtask">
-                                            <input v-model="inlineSubtasks[task.id].title" placeholder="زیروظیفه جدید..." @keyup.enter="createInlineSubtask(task)" />
-                                            <button @click="createInlineSubtask(task)">＋</button>
-                                        </div>
-
-                                        <footer class="trello-card-actions">
-                                            <span>{{ timeLabel(taskTotalSeconds(task)) }}</span>
-                                            <div>
-                                                <button v-if="task.status !== 'done' && !isTaskTimerActive(task)" @click="timer(task, 'start')">شروع</button>
-                                                <button v-if="isTaskTimerPaused(task)" @click="timer(task, 'resume')">ادامه</button>
-                                                <button v-if="isTaskTimerRunning(task)" @click="timer(task, 'pause')">توقف</button>
-                                                <button v-if="isTaskTimerActive(task)" class="stop-btn" @click="timer(task, 'stop')">Stop</button>
-                                                <button class="delete-mini" @click="deleteTask(task)">حذف</button>
-                                            </div>
-                                        </footer>
-                                    </article>
-
-                                    <button class="trello-add-card" @click="openTaskModal(category.id)">＋ افزودن کارت</button>
-                                    <div v-if="!categoryTasks(category.id).length" class="trello-empty">کارت تازه‌ای اینجا بساز.</div>
+                    <Teleport to="body" :disabled="!trelloFullscreen">
+                        <section v-if="viewMode === 'trello'" class="trello-board-card" :class="{ fullscreen: trelloFullscreen }" dir="rtl">
+                            <div class="section-head">
+                                <strong>برد ترلو</strong>
+                                <div class="trello-head-actions">
+                                    <span>{{ fa(tasks.length) }} کارت</span>
+                                    <button type="button" @click="trelloFullscreen = !trelloFullscreen">
+                                        {{ trelloFullscreen ? 'خروج از تمام صفحه' : 'نمایش تمام صفحه' }}
+                                    </button>
                                 </div>
-                            </section>
-                        </div>
-                    </section>
+                            </div>
+                            <div class="trello-board" dir="rtl">
+                                <section
+                                    v-for="category in categories"
+                                    :key="`trello-${category.id}`"
+                                    class="trello-list"
+                                    :style="{ '--c': category.color, '--soft': category.soft_color }"
+                                >
+                                    <header class="trello-list-head">
+                                        <div>
+                                            <span></span>
+                                            <strong>{{ category.name }}</strong>
+                                        </div>
+                                        <small>{{ fa(categoryStats(category.id).done) }}/{{ fa(categoryStats(category.id).total) }}</small>
+                                    </header>
+
+                                    <div class="trello-cards">
+                                        <article
+                                            v-for="task in categoryTasks(category.id)"
+                                            :key="`trello-card-${task.id}`"
+                                            :id="`task-${task.id}`"
+                                            class="trello-card"
+                                            :class="{ done: task.status === 'done', dragging: draggedTaskId === task.id, running: isTaskTimerRunning(task), paused: isTaskTimerPaused(task), referred: isReferred(task) }"
+                                            draggable="true"
+                                            @dragstart="draggedTaskId = task.id"
+                                            @dragover.prevent
+                                            @drop="reorderTask(category.id, task.id)"
+                                            @dragend="draggedTaskId = null"
+                                        >
+                                            <div class="trello-card-labels">
+                                                <i :style="{ background: category.color }"></i>
+                                                <span class="priority-pill" :style="priorityStyle(task.priority)">{{ priorityLabel(task.priority) }}</span>
+                                                <span v-if="taskGroupLabel(task)" class="task-group-pill" :style="taskGroupStyle(task)">{{ taskGroupLabel(task) }}</span>
+                                                <mark v-if="task.status === 'done'">انجام شد</mark>
+                                                <mark v-if="isReferred(task)" class="refer-text-badge" title="ارجاع داده شده">ارجاع شد</mark>
+                                                <button v-else class="refer-icon" title="ارجاع به روز دیگر" aria-label="ارجاع به روز دیگر" @click="openReferModal(task)"><svg viewBox="0 0 24 24"><path d="M7 17L17 7"></path><path d="M10 7h7v7"></path></svg></button>
+                                                <button v-if="task.description" class="info-icon" title="مشاهده توضیحات" aria-label="مشاهده توضیحات" @click="openDescriptionModal(task)">i</button>
+                                            </div>
+
+                                            <div class="trello-card-title">
+                                                <button class="check-btn" :class="{ checked: task.status === 'done' }" @click="toggleTask(task)">✓</button>
+                                                <strong>{{ task.title }}</strong>
+                                            </div>
+
+                                            <p>{{ task.planned_start_time ? `${task.planned_start_time} تا ${task.planned_end_time || ''}` : 'بدون زمان مشخص' }}</p>
+
+                                            <div v-if="task.subtasks.length" class="trello-checklist">
+                                                <div>
+                                                    <span>{{ fa(task.subtasks.filter(s => s.status === 'done').length) }} از {{ fa(task.subtasks.length) }}</span>
+                                                    <i :style="{ width: `${task.subtasks.length ? Math.round((task.subtasks.filter(s => s.status === 'done').length / task.subtasks.length) * 100) : 0}%` }"></i>
+                                                </div>
+                                                <button
+                                                    v-for="subtask in task.subtasks"
+                                                    :key="`trello-subtask-${subtask.id}`"
+                                                    :id="`subtask-${subtask.id}`"
+                                                    :class="{ done: subtask.status === 'done' }"
+                                                    @click="toggleSubtask(subtask)"
+                                                >
+                                                    <b></b>
+                                                    <span>{{ subtask.title }}</span>
+                                                </button>
+                                            </div>
+
+                                            <div class="inline-subtask trello-inline-subtask">
+                                                <input v-model="inlineSubtasks[task.id].title" placeholder="زیروظیفه جدید..." @keyup.enter="createInlineSubtask(task)" />
+                                                <button @click="createInlineSubtask(task)">＋</button>
+                                            </div>
+
+                                            <footer class="trello-card-actions">
+                                                <span>{{ timeLabel(taskTotalSeconds(task)) }}</span>
+                                                <div>
+                                                    <button v-if="task.status !== 'done' && !isTaskTimerActive(task)" @click="timer(task, 'start')">شروع</button>
+                                                    <button v-if="isTaskTimerPaused(task)" @click="timer(task, 'resume')">ادامه</button>
+                                                    <button v-if="isTaskTimerRunning(task)" @click="timer(task, 'pause')">توقف</button>
+                                                    <button v-if="isTaskTimerActive(task)" class="stop-btn" @click="timer(task, 'stop')">Stop</button>
+                                                    <button class="delete-mini" @click="deleteTask(task)">حذف</button>
+                                                </div>
+                                            </footer>
+                                        </article>
+
+                                        <button class="trello-add-card" @click="openTaskModal(category.id)">＋ افزودن کارت</button>
+                                        <div v-if="!categoryTasks(category.id).length" class="trello-empty">کارت تازه‌ای اینجا بساز.</div>
+                                    </div>
+                                </section>
+                            </div>
+                        </section>
+                    </Teleport>
 
                     <template v-if="viewMode === 'notebook'">
                     <section

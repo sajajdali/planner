@@ -4735,6 +4735,66 @@ body {
     color: rgba(255, 255, 255, .82);
 }
 
+.trello-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: auto;
+}
+
+.trello-head-actions button {
+    min-height: 32px;
+    border: 2px solid #3a2e1f;
+    border-radius: 10px;
+    background: #ffd93d;
+    color: #3a2e1f;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #3a2e1f;
+}
+
+.trello-board-card.fullscreen {
+    position: fixed;
+    inset: 0 !important;
+    z-index: 7000;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: 100dvw;
+    height: 100dvh;
+    margin: 0;
+    padding: 14px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.trello-board-card.fullscreen .section-head {
+    flex: 0 0 auto;
+    padding: 2px 6px 14px;
+}
+
+.trello-board-card.fullscreen .trello-board {
+    height: 100%;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 14px;
+}
+
+.trello-board-card.fullscreen .trello-list {
+    max-height: none;
+    height: 100%;
+    flex-basis: 320px;
+}
+
+.trello-board-card.fullscreen .trello-cards {
+    flex: 1;
+    min-height: 0;
+}
+
 .trello-board {
     display: flex;
     gap: 12px;
@@ -5060,6 +5120,34 @@ body {
     color: #626f86;
     font-size: 12px;
     text-align: center;
+}
+
+@media (max-width: 720px) {
+    .trello-board-card.fullscreen {
+        padding: 10px;
+    }
+
+    .trello-board-card.fullscreen .section-head {
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .trello-head-actions {
+        width: 100%;
+        justify-content: space-between;
+        margin-right: 0;
+    }
+
+    .trello-head-actions button {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 11px;
+    }
+
+    .trello-board-card.fullscreen .trello-list {
+        flex-basis: min(84vw, 310px);
+        min-width: min(84vw, 310px);
+    }
 }
 
 .simple-task-table {
