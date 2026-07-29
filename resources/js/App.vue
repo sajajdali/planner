@@ -8,6 +8,10 @@ const route = useRoute();
 const router = useRouter();
 const publicRoutes = ['/', '/login', '/register'];
 
+function isPublicRoute(path: string) {
+    return publicRoutes.includes(path) || path.startsWith('/shared-notes/');
+}
+
 function normalizeDigits(value: string) {
     return value
         .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
@@ -52,7 +56,7 @@ onMounted(async () => {
     document.addEventListener('beforeinput', normalizeTypedDigits, true);
     document.addEventListener('input', normalizeInputDigits, true);
     await auth.fetchUser();
-    if (!auth.user && !publicRoutes.includes(route.path)) {
+    if (!auth.user && !isPublicRoute(route.path)) {
         router.replace('/login');
     }
 });
@@ -66,7 +70,7 @@ watch(
     () => [auth.checked, auth.user, route.path],
     () => {
         if (!auth.checked) return;
-        if (!auth.user && !publicRoutes.includes(route.path)) router.replace('/login');
+        if (!auth.user && !isPublicRoute(route.path)) router.replace('/login');
         if (auth.user && ['/login', '/register'].includes(route.path)) router.replace('/app');
     },
 );
