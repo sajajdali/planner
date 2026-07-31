@@ -30,7 +30,7 @@ const imageUploading = ref(false);
 const noteEditorFullscreen = ref(false);
 const codeEditorFullscreen = ref(false);
 const selectedEditorImage = ref<HTMLImageElement | null>(null);
-const resizingImage = ref<{ image: HTMLImageElement; startX: number; startWidth: number; editorWidth: number } | null>(null);
+const resizingImage = ref<{ image: HTMLImageElement; startX: number; startWidth: number; editorWidth: number; corner: 'nw' | 'ne' | 'sw' | 'se' } | null>(null);
 const mobileImagePicker = ref(false);
 const galleryInputRef = ref<HTMLInputElement | null>(null);
 const cameraInputRef = ref<HTMLInputElement | null>(null);
@@ -143,6 +143,11 @@ function renderRichEditor() {
 
     for (const segment of segments) {
         if (segment.type === 'image') {
+            const frame = document.createElement('span');
+            frame.className = 'editor-image-frame';
+            frame.contentEditable = 'false';
+            frame.dataset.noteImageFrame = 'true';
+
             const image = document.createElement('img');
             image.src = segment.url;
             image.alt = segment.alt;
@@ -152,9 +157,12 @@ function renderRichEditor() {
             image.dataset.noteImage = 'true';
             if (segment.width) {
                 image.dataset.noteWidth = String(segment.width);
-                image.style.width = `${segment.width}%`;
+                frame.style.width = `${segment.width}%`;
             }
-            editor.appendChild(image);
+            image.style.width = '100%';
+            frame.appendChild(image);
+            addImageResizeHandles(frame);
+            editor.appendChild(frame);
             continue;
         }
 
@@ -174,14 +182,25 @@ function renderRichEditor() {
 }
 
 function clearSelectedEditorImage() {
-    selectedEditorImage.value?.classList.remove('selected');
+    selectedEditorImage.value?.closest('.editor-image-frame')?.classList.remove('selected');
     selectedEditorImage.value = null;
 }
 
 function selectEditorImage(image: HTMLImageElement) {
     clearSelectedEditorImage();
-    image.classList.add('selected');
+    image.closest('.editor-image-frame')?.classList.add('selected');
     selectedEditorImage.value = image;
+}
+
+function addImageResizeHandles(frame: HTMLElement) {
+    (['nw', 'ne', 'sw', 'se'] as const).forEach((corner) => {
+        const handle = document.createElement('button');
+        handle.type = 'button';
+        handle.className = `image-corner-handle ${corner}`;
+        handle.dataset.resizeCorner = corner;
+        handle.setAttribute('aria-label', 'تغییر اندازه عکس');
+        frame.appendChild(handle);
+    });
 }
 
 function serializeRichEditor() {
@@ -190,19 +209,15 @@ function serializeRichEditor() {
 
     const pieces: string[] = [];
     editor.childNodes.forEach((node) => {
-        if (node instanceof HTMLImageElement) {
-            const url = editorImageUrl(node.getAttribute('src'));
-            if (url) pieces.push(`![${imageAltWithWidth(node)}](${url})`);
-            return;
-        }
-
         if (node instanceof HTMLElement) {
-            const image = node.querySelector('img');
+            const image = node.matches('.editor-image-frame') ? node.querySelector('img') : node.querySelector('.editor-image-frame img');
             if (image) {
                 const url = editorImageUrl(image.getAttribute('src'));
                 if (url) pieces.push(`![${imageAltWithWidth(image)}](${url})`);
-                const text = node.innerText.replace(/\u200b/g, '').trim();
-                if (text) pieces.push(text);
+                if (!node.matches('.editor-image-frame')) {
+                    const text = node.innerText.replace(/\u200b/g, '').trim();
+                    if (text) pieces.push(text);
+                }
                 return;
             }
             const text = node.innerText.replace(/\u200b/g, '').trim();
@@ -339,6 +354,11 @@ function insertRichImage(url: string) {
     if (!editor) return;
 
     editor.focus();
+    const frame = document.createElement('span');
+    frame.className = 'editor-image-frame';
+    frame.contentEditable = 'false';
+    frame.dataset.noteImageFrame = 'true';
+
     const image = document.createElement('img');
     image.src = url;
     image.alt = 'image';
@@ -347,7 +367,10 @@ function insertRichImage(url: string) {
     image.contentEditable = 'false';
     image.dataset.noteImage = 'true';
     image.dataset.noteWidth = '70';
-    image.style.width = '70%';
+    image.style.width = '100%';
+    frame.style.width = '70%';
+    frame.appendChild(image);
+    addImageResizeHandles(frame);
 
     const selection = window.getSelection();
     const range = savedEditorRange.value ?? (selection?.rangeCount ? selection.getRangeAt(0) : null);
@@ -355,19 +378,19 @@ function insertRichImage(url: string) {
         selection?.removeAllRanges();
         selection?.addRange(range);
         range.deleteContents();
-        range.insertNode(image);
-        range.setStartAfter(image);
-        range.setEndAfter(image);
+        range.insertNode(frame);
+        range.setStartAfter(frame);
+        range.setEndAfter(frame);
         selection?.removeAllRanges();
         selection?.addRange(range);
     } else {
-        editor.appendChild(image);
+        editor.appendChild(frame);
         placeCaretAtEnd(editor);
     }
 
     const paragraph = document.createElement('p');
     paragraph.textContent = '\u200b';
-    image.after(paragraph);
+    frame.after(paragraph);
     serializeRichEditor();
     selectEditorImage(image);
     savedEditorRange.value = null;
@@ -568,6 +591,14 @@ function handleRichEditorInput() {
 
 function handleRichEditorClick(event: MouseEvent) {
     const target = event.target;
+    if (target instanceof HTMLElement && target.dataset.resizeCorner) {
+        const image = target.closest('.editor-image-frame')?.querySelector('img');
+        if (image) {
+            selectEditorImage(image);
+            startImageResize(event, target.dataset.resizeCorner as 'nw' | 'ne' | 'sw' | 'se');
+        }
+        return;
+    }
     if (target instanceof HTMLImageElement && target.dataset.noteImage === 'true') {
         selectEditorImage(target);
         return;
@@ -579,8 +610,9 @@ function deleteSelectedEditorImage() {
     const image = selectedEditorImage.value;
     if (!image) return;
 
-    const next = image.nextSibling;
-    image.remove();
+    const frame = image.closest('.editor-image-frame');
+    const next = frame?.nextSibling ?? image.nextSibling;
+    (frame ?? image).remove();
     clearSelectedEditorImage();
     serializeRichEditor();
 
@@ -591,30 +623,19 @@ function deleteSelectedEditorImage() {
     }
 }
 
-function resizeHandleStyle() {
-    const image = selectedEditorImage.value;
-    const editor = richEditorRef.value;
-    if (!image || !editor) return {};
-
-    const imageRect = image.getBoundingClientRect();
-    const editorRect = editor.getBoundingClientRect();
-    return {
-        top: `${imageRect.bottom - editorRect.top + editor.scrollTop - 12}px`,
-        left: `${imageRect.left - editorRect.left + editor.scrollLeft - 12}px`,
-    };
-}
-
-function startImageResize(event: MouseEvent) {
+function startImageResize(event: MouseEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
     const image = selectedEditorImage.value;
     const editor = richEditorRef.value;
     if (!image || !editor) return;
 
     event.preventDefault();
+    event.stopPropagation();
     resizingImage.value = {
         image,
         startX: event.clientX,
         startWidth: image.getBoundingClientRect().width,
         editorWidth: editor.clientWidth,
+        corner,
     };
 
     window.addEventListener('mousemove', handleImageResize);
@@ -625,11 +646,13 @@ function handleImageResize(event: MouseEvent) {
     const resizing = resizingImage.value;
     if (!resizing) return;
 
-    const delta = resizing.startX - event.clientX;
+    const growsToLeft = resizing.corner === 'nw' || resizing.corner === 'sw';
+    const delta = growsToLeft ? resizing.startX - event.clientX : event.clientX - resizing.startX;
     const nextPixels = Math.min(resizing.editorWidth, Math.max(120, resizing.startWidth + delta));
     const width = Math.min(100, Math.max(15, Math.round((nextPixels / resizing.editorWidth) * 100)));
     resizing.image.dataset.noteWidth = String(width);
-    resizing.image.style.width = `${width}%`;
+    const frame = resizing.image.closest<HTMLElement>('.editor-image-frame');
+    if (frame) frame.style.width = `${width}%`;
 }
 
 function stopImageResize() {
@@ -902,14 +925,6 @@ onMounted(load);
                         @paste="handleNotePaste"
                     ></div>
                     <button v-if="selectedEditorImage" type="button" class="image-delete-btn" @click="deleteSelectedEditorImage">حذف عکس</button>
-                    <button
-                        v-if="selectedEditorImage"
-                        type="button"
-                        class="image-resize-handle"
-                        :style="resizeHandleStyle()"
-                        aria-label="تغییر اندازه عکس"
-                        @mousedown="startImageResize"
-                    ></button>
                     <button type="button" class="mobile-image-insert" aria-label="درج عکس" @click="openMobileImagePicker">
                         <svg viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v13H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
                     </button>
@@ -1027,7 +1042,7 @@ onMounted(load);
 .view-modal header .share-icon-btn{height:30px!important;min-height:30px!important}
 .share-backdrop{z-index:10000!important;background:rgba(23,19,33,.68)!important;backdrop-filter:blur(3px)}.share-note-modal{position:relative!important;width:340px!important;max-width:calc(100vw - 32px)!important;display:grid;gap:14px;overflow:visible!important;padding:22px!important;text-align:center}.share-close{position:absolute;top:12px;left:12px;width:30px!important;height:30px!important;min-width:0!important;border:2px solid #3a2e1f!important;border-radius:9px!important;background:#fff!important;color:#3a2e1f!important;font-size:18px!important;font-weight:900!important;box-shadow:2px 2px 0 #3a2e1f!important;cursor:pointer}.share-modal-head{display:grid;gap:6px;padding:2px 34px 0}.share-modal-head span{justify-self:center;padding:3px 12px;border:1.5px solid #3a2e1f;border-radius:999px;background:#ffd93d;color:#3a2e1f;font-size:11px;font-weight:900;box-shadow:1px 1px 0 #3a2e1f}.share-modal-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3a2e1f;font-size:16px;font-weight:900}.qr-frame{justify-self:center;padding:12px;border:2px solid #3a2e1f;border-radius:18px;background:#fff;box-shadow:4px 4px 0 #3a2e1f}.qr-frame img{display:block;width:190px;height:190px}.share-link-box{display:grid!important;gap:6px!important;margin:0!important;text-align:right!important}.share-link-box span{color:#8a4b1e!important;font-size:11px!important;font-weight:900!important}.share-link-box input{height:38px!important;border:2px solid #efe3c4!important;border-radius:11px!important;background:#fff!important;color:#3a2e1f!important;text-align:left!important;font-family:"JetBrains Mono",monospace!important;font-size:12px!important;font-weight:800!important}.share-copy-btn{height:40px;border:2px solid #3a2e1f;border-radius:12px;background:#22d3d0;color:#0b4a48;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:900;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.share-copy-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
 .image-chip{display:inline-block;margin-inline-start:6px;padding:2px 8px;border-radius:999px;background:#e0f7f6;color:#0b4a48;font-size:10px;font-weight:900}.note-editor-hint{margin:-6px 0 12px;color:#7a6a4f;font-size:11.5px;font-weight:800}.rich-preview{display:block;margin:-2px 0 14px;padding:12px;border:1.5px dashed #d7c9a6;border-radius:12px;background:#fff}.rich-preview p,.rich-text p{margin:0;white-space:pre-wrap}.rich-preview img,.rich-text img{display:block;max-width:100%;max-height:420px;object-fit:contain;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}.rich-text{display:block;white-space:normal!important}.shared-text.rich-text,.full-text.rich-text{white-space:normal!important}
-.editor-panel{position:relative;display:grid;gap:10px}.editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 0}.editor-toolbar>div{display:flex;align-items:center;gap:8px}.editor-toolbar span{color:#7a6a4f;font-size:11.5px;font-weight:800}.editor-toolbar button{height:32px;border:1.5px solid #3a2e1f;border-radius:9px;background:#ffd93d;color:#3a2e1f;padding:0 12px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.word-editor{min-height:260px;max-height:46vh;overflow:auto;padding:18px;border:2px solid #3a2e1f;border-radius:14px;background:#fff;color:#3a2e1f;box-shadow:3px 3px 0 #3a2e1f;font-size:14.5px;line-height:2;outline:0;white-space:pre-wrap;overscroll-behavior:contain}.word-editor:focus{box-shadow:3px 3px 0 #3a2e1f,0 0 0 4px rgba(34,211,208,.22)}.word-editor p{margin:0 0 10px;min-height:1.8em}.word-editor img{display:block;max-width:100%;max-height:420px;object-fit:contain;margin:12px auto;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.word-editor img.selected{border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}.image-delete-btn{position:absolute;left:14px;bottom:14px;z-index:2;height:34px;border:2px solid #3a2e1f;border-radius:10px;background:#fee2e2;color:#991b1b;padding:0 13px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.image-resize-handle{position:absolute;z-index:3;width:22px;height:22px;border:2px solid #3a2e1f;border-radius:7px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;cursor:nwse-resize}.image-resize-handle::before{content:"";position:absolute;inset:5px;border-left:2px solid #3a2e1f;border-bottom:2px solid #3a2e1f}.editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;overflow:hidden;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#fffbf0;background-image:radial-gradient(#efe3c4 1px,transparent 1px);background-size:18px 18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}.editor-panel.fullscreen .editor-toolbar{margin:0}.editor-panel.fullscreen .word-editor{min-height:0;max-height:none;height:100%;overflow:auto;font-size:16px;line-height:2.15;padding:24px}.editor-panel.fullscreen .image-delete-btn{left:28px;bottom:28px}
+.editor-panel{position:relative;display:grid;gap:10px}.editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 0}.editor-toolbar>div{display:flex;align-items:center;gap:8px}.editor-toolbar span{color:#7a6a4f;font-size:11.5px;font-weight:800}.editor-toolbar button{height:32px;border:1.5px solid #3a2e1f;border-radius:9px;background:#ffd93d;color:#3a2e1f;padding:0 12px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.word-editor{min-height:260px;max-height:46vh;overflow:auto;padding:18px;border:2px solid #3a2e1f;border-radius:14px;background:#fff;color:#3a2e1f;box-shadow:3px 3px 0 #3a2e1f;font-size:14.5px;line-height:2;outline:0;white-space:pre-wrap;overscroll-behavior:contain}.word-editor:focus{box-shadow:3px 3px 0 #3a2e1f,0 0 0 4px rgba(34,211,208,.22)}.word-editor p{margin:0 0 10px;min-height:1.8em}.editor-image-frame{position:relative;display:block;width:70%;max-width:100%;margin:12px auto;line-height:0}.editor-image-frame img{display:block;width:100%;max-width:100%;max-height:420px;object-fit:contain;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.editor-image-frame.selected img{border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}.image-corner-handle{position:absolute;z-index:4;display:none;width:16px;height:16px;border:2px solid #3a2e1f;border-radius:5px;background:#ffd93d;box-shadow:1px 1px 0 #3a2e1f;cursor:nwse-resize}.editor-image-frame.selected .image-corner-handle{display:block}.image-corner-handle.nw{top:-8px;left:-8px}.image-corner-handle.ne{top:-8px;right:-8px;cursor:nesw-resize}.image-corner-handle.sw{bottom:-8px;left:-8px;cursor:nesw-resize}.image-corner-handle.se{right:-8px;bottom:-8px}.image-delete-btn{position:absolute;left:14px;bottom:14px;z-index:2;height:34px;border:2px solid #3a2e1f;border-radius:10px;background:#fee2e2;color:#991b1b;padding:0 13px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;overflow:hidden;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#fffbf0;background-image:radial-gradient(#efe3c4 1px,transparent 1px);background-size:18px 18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}.editor-panel.fullscreen .editor-toolbar{margin:0}.editor-panel.fullscreen .word-editor{min-height:0;max-height:none;height:100%;overflow:auto;font-size:16px;line-height:2.15;padding:24px}.editor-panel.fullscreen .image-delete-btn{left:28px;bottom:28px}
 .code-editor-panel{display:grid;gap:10px}.code-editor-panel textarea.code{min-height:220px}.code-toolbar span{font-family:"JetBrains Mono",monospace;color:#ffd93d;background:#2d2540;border-radius:999px;padding:4px 10px}.code-editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#171321;box-shadow:0 24px 60px rgba(0,0,0,.55)}.code-editor-panel.fullscreen .editor-toolbar{margin:0}.code-editor-panel.fullscreen textarea.code{min-height:0;height:100%;max-height:none;resize:none;border:2px solid #3a2e1f;border-radius:14px;background:#0f0b18;color:#f5ead3;font-size:15px;line-height:1.85;padding:20px;box-shadow:3px 3px 0 #3a2e1f}
 .item-modal>footer{margin-top:18px}
 :global(body.note-editor-scroll-lock){overflow:hidden!important;overscroll-behavior:none}
