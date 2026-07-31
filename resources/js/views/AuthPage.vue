@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
@@ -22,6 +22,7 @@ const error = ref('');
 const sent = ref(false);
 const phoneSubmitted = ref('');
 const codeSubmitted = ref('');
+const codeInputRef = ref<HTMLInputElement | null>(null);
 
 const title = computed(() => {
     if (step.value === 'code') return 'کد تایید رو وارد کن';
@@ -45,6 +46,14 @@ watch(() => route.path, () => {
     sent.value = false;
     phoneSubmitted.value = '';
     codeSubmitted.value = '';
+});
+
+watch(step, async (current) => {
+    if (current !== 'code') return;
+
+    await nextTick();
+    codeInputRef.value?.focus();
+    codeInputRef.value?.select();
 });
 
 function normalizeDigits(value: string) {
@@ -207,7 +216,7 @@ function backOneStep() {
 
                 <label>
                     کد تایید
-                    <input v-model="code" class="otp-input" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="1234" required @input="onCodeInput" />
+                    <input ref="codeInputRef" v-model="code" class="otp-input" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="1234" required @input="onCodeInput" />
                 </label>
 
                 <p v-if="error" class="form-error">{{ error }}</p>

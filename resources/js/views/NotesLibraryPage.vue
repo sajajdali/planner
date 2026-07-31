@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
@@ -10,6 +10,7 @@ type NoteItem = { id: number; notebook_note_group_id: number; title: string; con
 type NoteForm = { id: number | null; groupId: number | ''; title: string; content: string; content_type: NoteType; language: string; is_important: boolean };
 type GroupForm = { id: number | null; name: string; color: string; icon: 'text' | 'code' | 'terminal' };
 type CodeToken = { text: string; className?: string };
+type TextSegment = { type: 'text'; text: string } | { type: 'image'; url: string; alt: string; width: number | null };
 
 const loading = ref(true);
 const search = ref('');
@@ -24,8 +25,17 @@ const shareModal = ref<{ note: NoteItem; url: string; qr: string } | null>(null)
 const deleteConfirm = ref<{ title: string; message: string; run: () => Promise<void> } | null>(null);
 const groupForm = ref<GroupForm>({ id: null, name: '', color: '#FF6FA5', icon: 'text' });
 const noteForm = ref<NoteForm>({ id: null, groupId: '', title: '', content: '', content_type: 'text', language: 'javascript', is_important: false });
+const richEditorRef = ref<HTMLElement | null>(null);
+const imageUploading = ref(false);
+const noteEditorFullscreen = ref(false);
+const codeEditorFullscreen = ref(false);
+const selectedEditorImage = ref<HTMLImageElement | null>(null);
+const resizingImage = ref<{ image: HTMLImageElement; startX: number; startWidth: number; editorWidth: number } | null>(null);
 
 const colors = ['#FF6FA5', '#22D3D0', '#9B5DE5', '#FFD93D', '#FF8A3D', '#2563EB', '#16A34A', '#EF4444', '#0EA5E9', '#F97316', '#A855F7', '#14B8A6'];
+const maxImageSide = 1280;
+const maxImageBytes = 500 * 1024;
+const minImageQuality = 0.72;
 const languages = [
     ['javascript', 'JavaScript'],
     ['python', 'Python'],
@@ -59,6 +69,148 @@ function languageLabel(value?: string | null) {
 
 function preview(content: string) {
     return content.length > 140 ? `${content.slice(0, 140)}...` : content;
+}
+
+function normalizeNoteImageUrl(url: string) {
+    try {
+        const parsed = new URL(url, window.location.origin);
+        return parsed.pathname.startsWith('/storage/notebook-images/') ? parsed.pathname : '';
+    } catch {
+        return url.startsWith('/storage/notebook-images/') ? url : '';
+    }
+}
+
+function noteImageMarkupPattern() {
+    return /!\[([^\]]*)]\(((?:https?:\/\/[^)\s]+)?\/storage\/notebook-images\/[^)\s]+)\)/g;
+}
+
+function imageMeta(rawAlt: string) {
+    const widthMatch = rawAlt.match(/\|w=(\d{1,3})$/);
+    const width = widthMatch ? Math.min(100, Math.max(15, Number(widthMatch[1]))) : null;
+    return {
+        alt: (widthMatch ? rawAlt.slice(0, widthMatch.index) : rawAlt) || 'تصویر یادداشت',
+        width,
+    };
+}
+
+function imageAltWithWidth(image: HTMLImageElement) {
+    const alt = (image.dataset.noteAlt || image.alt || 'image').replace(/\|w=\d{1,3}$/, '');
+    const width = image.dataset.noteWidth;
+    return width ? `${alt}|w=${width}` : alt;
+}
+
+function textWithoutImageMarkup(content: string) {
+    return content.replace(noteImageMarkupPattern(), '').trim();
+}
+
+function imageCount(content: string) {
+    return Array.from(content.matchAll(noteImageMarkupPattern())).length;
+}
+
+function renderedTextSegments(content: string): TextSegment[] {
+    const segments: TextSegment[] = [];
+    const matcher = noteImageMarkupPattern();
+    let last = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = matcher.exec(content)) !== null) {
+        if (match.index > last) segments.push({ type: 'text', text: content.slice(last, match.index) });
+        const url = normalizeNoteImageUrl(match[2]);
+        const meta = imageMeta(match[1] || 'تصویر یادداشت');
+        if (url) segments.push({ type: 'image', alt: meta.alt, width: meta.width, url });
+        last = matcher.lastIndex;
+    }
+
+    if (last < content.length) segments.push({ type: 'text', text: content.slice(last) });
+    return segments.length ? segments : [{ type: 'text', text: content }];
+}
+
+function editorImageUrl(url: string | null) {
+    return url ? normalizeNoteImageUrl(url) : '';
+}
+
+function renderRichEditor() {
+    const editor = richEditorRef.value;
+    if (!editor || noteForm.value.content_type !== 'text') return;
+
+    clearSelectedEditorImage();
+    editor.replaceChildren();
+    const segments = renderedTextSegments(noteForm.value.content);
+
+    for (const segment of segments) {
+        if (segment.type === 'image') {
+            const image = document.createElement('img');
+            image.src = segment.url;
+            image.alt = segment.alt;
+            image.dataset.noteAlt = segment.alt;
+            image.loading = 'lazy';
+            image.contentEditable = 'false';
+            image.dataset.noteImage = 'true';
+            if (segment.width) {
+                image.dataset.noteWidth = String(segment.width);
+                image.style.width = `${segment.width}%`;
+            }
+            editor.appendChild(image);
+            continue;
+        }
+
+        const parts = segment.text.split(/\n{2,}/);
+        for (const part of parts) {
+            const paragraph = document.createElement('p');
+            paragraph.textContent = part.trim() ? part : '\u200b';
+            editor.appendChild(paragraph);
+        }
+    }
+
+    if (!editor.childNodes.length) {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = '\u200b';
+        editor.appendChild(paragraph);
+    }
+}
+
+function clearSelectedEditorImage() {
+    selectedEditorImage.value?.classList.remove('selected');
+    selectedEditorImage.value = null;
+}
+
+function selectEditorImage(image: HTMLImageElement) {
+    clearSelectedEditorImage();
+    image.classList.add('selected');
+    selectedEditorImage.value = image;
+}
+
+function serializeRichEditor() {
+    const editor = richEditorRef.value;
+    if (!editor) return;
+
+    const pieces: string[] = [];
+    editor.childNodes.forEach((node) => {
+        if (node instanceof HTMLImageElement) {
+            const url = editorImageUrl(node.getAttribute('src'));
+            if (url) pieces.push(`![${imageAltWithWidth(node)}](${url})`);
+            return;
+        }
+
+        if (node instanceof HTMLElement) {
+            const image = node.querySelector('img');
+            if (image) {
+                const url = editorImageUrl(image.getAttribute('src'));
+                if (url) pieces.push(`![${imageAltWithWidth(image)}](${url})`);
+                const text = node.innerText.replace(/\u200b/g, '').trim();
+                if (text) pieces.push(text);
+                return;
+            }
+            const text = node.innerText.replace(/\u200b/g, '').trim();
+            if (text) pieces.push(text);
+            return;
+        }
+
+        const text = node.textContent?.replace(/\u200b/g, '').trim();
+        if (text) pieces.push(text);
+    });
+
+    noteForm.value.content = pieces.join('\n').trim();
 }
 
 function codePreview(content: string) {
@@ -137,10 +289,15 @@ function openNoteModal(groupId?: number, note?: NoteItem) {
         }
         : { id: null, groupId: groupId ?? groups.value[0]?.id ?? '', title: '', content: '', content_type: 'text', language: 'javascript', is_important: false };
     noteModal.value = true;
+    noteEditorFullscreen.value = false;
+    codeEditorFullscreen.value = false;
+    clearSelectedEditorImage();
+    void nextTick(renderRichEditor);
 }
 
 async function saveNote() {
     if (!noteForm.value.title.trim() || !noteForm.value.groupId) return;
+    if (noteForm.value.content_type === 'text') serializeRichEditor();
     const payload = {
         notebook_note_group_id: noteForm.value.groupId,
         title: noteForm.value.title.trim(),
@@ -162,6 +319,301 @@ async function saveNote() {
     noteModal.value = false;
     showToast(noteForm.value.id ? 'یادداشت ویرایش شد' : 'یادداشت اضافه شد');
 }
+
+function placeCaretAtEnd(element: HTMLElement) {
+    element.focus();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+}
+
+function insertRichImage(url: string) {
+    const editor = richEditorRef.value;
+    if (!editor) return;
+
+    editor.focus();
+    const image = document.createElement('img');
+    image.src = url;
+    image.alt = 'image';
+    image.dataset.noteAlt = 'image';
+    image.loading = 'lazy';
+    image.contentEditable = 'false';
+    image.dataset.noteImage = 'true';
+    image.dataset.noteWidth = '70';
+    image.style.width = '70%';
+
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (range && editor.contains(range.commonAncestorContainer)) {
+        range.deleteContents();
+        range.insertNode(image);
+        range.setStartAfter(image);
+        range.setEndAfter(image);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+    } else {
+        editor.appendChild(image);
+        placeCaretAtEnd(editor);
+    }
+
+    const paragraph = document.createElement('p');
+    paragraph.textContent = '\u200b';
+    image.after(paragraph);
+    serializeRichEditor();
+    selectEditorImage(image);
+}
+
+function insertPlainTextInEditor(text: string) {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || !richEditorRef.value?.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+        richEditorRef.value?.append(document.createTextNode(text));
+        serializeRichEditor();
+        return;
+    }
+
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(document.createTextNode(text));
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    serializeRichEditor();
+}
+
+async function uploadNoteImage(file: File) {
+    const formData = new FormData();
+    formData.append('image', await prepareNoteImage(file));
+    const { data } = await api.post('/notebook-notes/images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return normalizeNoteImageUrl(data.url as string);
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+    return new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Image compression failed'));
+        }, type, quality);
+    });
+}
+
+function loadImage(file: File) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(image);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Image loading failed'));
+        };
+        image.src = url;
+    });
+}
+
+async function prepareNoteImage(file: File) {
+    if (file.type === 'image/gif') return file;
+
+    const image = await loadImage(file);
+    const ratio = Math.min(1, maxImageSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) return file;
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, 0, 0, width, height);
+
+    let bestBlob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+    for (let quality = 0.84; bestBlob.size > maxImageBytes && quality >= minImageQuality; quality -= 0.06) {
+        bestBlob = await canvasToBlob(canvas, 'image/jpeg', quality);
+    }
+
+    return new File([bestBlob], `${file.name.replace(/\.[^.]+$/, '') || 'note-image'}.jpg`, {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+    });
+}
+
+function dataUrlToFile(dataUrl: string) {
+    const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) return null;
+
+    const binary = atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+
+    const extension = match[1].split('/')[1] || 'png';
+    return new File([bytes], `pasted-image.${extension}`, { type: match[1], lastModified: Date.now() });
+}
+
+function pastedHtmlImage(event: ClipboardEvent) {
+    const html = event.clipboardData?.getData('text/html') ?? '';
+    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (!match) return null;
+
+    if (match[1].startsWith('data:image/')) return dataUrlToFile(match[1]);
+
+    const normalized = normalizeNoteImageUrl(match[1]);
+    if (normalized) {
+        insertRichImage(normalized);
+        return 'inserted' as const;
+    }
+
+    return null;
+}
+
+async function handleNotePaste(event: ClipboardEvent) {
+    if (noteForm.value.content_type !== 'text') return;
+
+    let image = Array.from(event.clipboardData?.items ?? [])
+        .find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        ?.getAsFile();
+
+    const htmlImage = image ? null : pastedHtmlImage(event);
+    if (htmlImage === 'inserted') {
+        event.preventDefault();
+        serializeRichEditor();
+        return;
+    }
+    if (htmlImage instanceof File) image = htmlImage;
+
+    event.preventDefault();
+
+    if (!image) {
+        insertPlainTextInEditor(event.clipboardData?.getData('text/plain') ?? '');
+        return;
+    }
+
+    imageUploading.value = true;
+
+    try {
+        const url = await uploadNoteImage(image);
+        insertRichImage(url);
+        showToast('تصویر به یادداشت اضافه شد');
+    } catch {
+        showToast('آپلود تصویر انجام نشد');
+    } finally {
+        imageUploading.value = false;
+    }
+}
+
+function handleRichEditorInput() {
+    serializeRichEditor();
+}
+
+function handleRichEditorClick(event: MouseEvent) {
+    const target = event.target;
+    if (target instanceof HTMLImageElement && target.dataset.noteImage === 'true') {
+        selectEditorImage(target);
+        return;
+    }
+    clearSelectedEditorImage();
+}
+
+function deleteSelectedEditorImage() {
+    const image = selectedEditorImage.value;
+    if (!image) return;
+
+    const next = image.nextSibling;
+    image.remove();
+    clearSelectedEditorImage();
+    serializeRichEditor();
+
+    if (next instanceof HTMLElement) {
+        placeCaretAtEnd(next);
+    } else if (richEditorRef.value) {
+        placeCaretAtEnd(richEditorRef.value);
+    }
+}
+
+function resizeHandleStyle() {
+    const image = selectedEditorImage.value;
+    const editor = richEditorRef.value;
+    if (!image || !editor) return {};
+
+    const imageRect = image.getBoundingClientRect();
+    const editorRect = editor.getBoundingClientRect();
+    return {
+        top: `${imageRect.bottom - editorRect.top + editor.scrollTop - 12}px`,
+        left: `${imageRect.left - editorRect.left + editor.scrollLeft - 12}px`,
+    };
+}
+
+function startImageResize(event: MouseEvent) {
+    const image = selectedEditorImage.value;
+    const editor = richEditorRef.value;
+    if (!image || !editor) return;
+
+    event.preventDefault();
+    resizingImage.value = {
+        image,
+        startX: event.clientX,
+        startWidth: image.getBoundingClientRect().width,
+        editorWidth: editor.clientWidth,
+    };
+
+    window.addEventListener('mousemove', handleImageResize);
+    window.addEventListener('mouseup', stopImageResize, { once: true });
+}
+
+function handleImageResize(event: MouseEvent) {
+    const resizing = resizingImage.value;
+    if (!resizing) return;
+
+    const delta = resizing.startX - event.clientX;
+    const nextPixels = Math.min(resizing.editorWidth, Math.max(120, resizing.startWidth + delta));
+    const width = Math.min(100, Math.max(15, Math.round((nextPixels / resizing.editorWidth) * 100)));
+    resizing.image.dataset.noteWidth = String(width);
+    resizing.image.style.width = `${width}%`;
+}
+
+function stopImageResize() {
+    if (!resizingImage.value) return;
+    serializeRichEditor();
+    resizingImage.value = null;
+    window.removeEventListener('mousemove', handleImageResize);
+}
+
+function handleRichEditorKeydown(event: KeyboardEvent) {
+    if (!selectedEditorImage.value) return;
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+
+    event.preventDefault();
+    deleteSelectedEditorImage();
+}
+
+function toggleNoteEditorFullscreen() {
+    noteEditorFullscreen.value = !noteEditorFullscreen.value;
+    void nextTick(() => {
+        renderRichEditor();
+        richEditorRef.value && placeCaretAtEnd(richEditorRef.value);
+    });
+}
+
+function toggleCodeEditorFullscreen() {
+    codeEditorFullscreen.value = !codeEditorFullscreen.value;
+}
+
+watch(() => noteForm.value.content_type, async (type) => {
+    if (type !== 'text') return;
+    await nextTick();
+    renderRichEditor();
+});
 
 async function copyText(text: string, message = 'کپی شد') {
     try {
@@ -304,7 +756,10 @@ onMounted(load);
                                     </div>
                                 </header>
                                 <pre v-if="note.content_type === 'code'" class="code-preview"><code><span v-for="(token, tokenIndex) in highlightedCode(codePreview(note.content))" :key="tokenIndex" :class="token.className">{{ token.text }}</span></code></pre>
-                                <p v-else>{{ preview(note.content) || 'بدون محتوا' }}</p>
+                                <p v-else>
+                                    {{ preview(textWithoutImageMarkup(note.content)) || 'بدون محتوا' }}
+                                    <span v-if="imageCount(note.content)" class="image-chip">{{ imageCount(note.content) }} تصویر</span>
+                                </p>
                                 <footer>
                                     <button class="copy" type="button" @click="copyText(note.content)">
                                         <svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 012-2h10"></path></svg>
@@ -370,7 +825,54 @@ onMounted(load);
                 </div>
                 <label v-if="noteForm.content_type === 'code'">زبان<select v-model="noteForm.language"><option v-for="[value, label] in languages" :key="value" :value="value">{{ label }}</option></select></label>
                 <label class="check-line"><input v-model="noteForm.is_important" type="checkbox" /> مهم</label>
-                <textarea v-model="noteForm.content" :class="{ code: noteForm.content_type === 'code' }" :placeholder="noteForm.content_type === 'code' ? '// کد خودت را اینجا بنویس' : 'متن خودت را اینجا بنویس...'" />
+                <div v-if="noteForm.content_type === 'text'" class="editor-panel" :class="{ fullscreen: noteEditorFullscreen }">
+                    <div class="editor-toolbar">
+                        <span>{{ imageUploading ? 'در حال آپلود تصویر...' : 'عکس را paste کن تا همانجا بین متن دیده شود.' }}</span>
+                        <div>
+                            <button v-if="noteEditorFullscreen" type="submit">ذخیره</button>
+                            <button type="button" @click="toggleNoteEditorFullscreen">
+                                {{ noteEditorFullscreen ? 'خروج از تمام صفحه' : 'تمام صفحه' }}
+                            </button>
+                        </div>
+                    </div>
+                    <div
+                        ref="richEditorRef"
+                        class="word-editor"
+                        contenteditable="true"
+                        role="textbox"
+                        aria-multiline="true"
+                        data-placeholder="متن خودت را اینجا بنویس یا عکس را paste کن..."
+                        @input="handleRichEditorInput"
+                        @click="handleRichEditorClick"
+                        @keydown="handleRichEditorKeydown"
+                        @paste="handleNotePaste"
+                    ></div>
+                    <button v-if="selectedEditorImage" type="button" class="image-delete-btn" @click="deleteSelectedEditorImage">حذف عکس</button>
+                    <button
+                        v-if="selectedEditorImage"
+                        type="button"
+                        class="image-resize-handle"
+                        :style="resizeHandleStyle()"
+                        aria-label="تغییر اندازه عکس"
+                        @mousedown="startImageResize"
+                    ></button>
+                </div>
+                <div v-else class="code-editor-panel" :class="{ fullscreen: codeEditorFullscreen }">
+                    <div class="editor-toolbar code-toolbar">
+                        <span>{{ languageLabel(noteForm.language) }}</span>
+                        <div>
+                            <button v-if="codeEditorFullscreen" type="submit">ذخیره</button>
+                            <button type="button" @click="toggleCodeEditorFullscreen">
+                                {{ codeEditorFullscreen ? 'خروج از تمام صفحه' : 'تمام صفحه' }}
+                            </button>
+                        </div>
+                    </div>
+                    <textarea
+                        v-model="noteForm.content"
+                        class="code"
+                        placeholder="// کد خودت را اینجا بنویس"
+                    />
+                </div>
                 <footer><button type="button" @click="noteModal = false">انصراف</button><button class="primary pink" type="submit">ذخیره</button></footer>
             </form>
         </div>
@@ -388,7 +890,12 @@ onMounted(load);
                     <button type="button" @click="viewNote = null; fullScreenCode = false">×</button>
                 </header>
                 <pre v-if="viewNote.content_type === 'code'" class="full-code"><code><span v-for="(token, tokenIndex) in highlightedCode(viewNote.content)" :key="tokenIndex" :class="token.className">{{ token.text }}</span></code></pre>
-                <div v-else class="full-text">{{ viewNote.content }}</div>
+                <div v-else class="full-text rich-text">
+                    <template v-for="(segment, segmentIndex) in renderedTextSegments(viewNote.content)" :key="segmentIndex">
+                        <p v-if="segment.type === 'text' && segment.text.trim()">{{ segment.text }}</p>
+                        <img v-else-if="segment.type === 'image'" :src="segment.url" :alt="segment.alt" :style="segment.width ? { width: `${segment.width}%` } : undefined" loading="lazy" />
+                    </template>
+                </div>
                 <footer>
                     <button type="button" @click="openNoteModal(viewNote.notebook_note_group_id, viewNote); viewNote = null">ویرایش</button>
                     <button class="copy-modal" type="button" @click="copyText(viewNote.content)">کپی همه</button>
@@ -410,7 +917,15 @@ onMounted(load);
                 <button type="button" @click="fullScreenCode = false">بستن</button>
             </header>
             <pre v-if="viewNote.content_type === 'code'" class="fullscreen-code"><code><span v-for="(token, tokenIndex) in highlightedCode(viewNote.content)" :key="tokenIndex" :class="token.className">{{ token.text }}</span></code></pre>
-            <article v-else class="fullscreen-text">{{ viewNote.content || 'بدون محتوا' }}</article>
+            <article v-else class="fullscreen-text rich-text">
+                <template v-if="viewNote.content">
+                    <template v-for="(segment, segmentIndex) in renderedTextSegments(viewNote.content)" :key="segmentIndex">
+                        <p v-if="segment.type === 'text' && segment.text.trim()">{{ segment.text }}</p>
+                        <img v-else-if="segment.type === 'image'" :src="segment.url" :alt="segment.alt" :style="segment.width ? { width: `${segment.width}%` } : undefined" loading="lazy" />
+                    </template>
+                </template>
+                <template v-else>بدون محتوا</template>
+            </article>
         </div>
 
         <div v-if="deleteConfirm" class="modal-backdrop">
@@ -434,5 +949,9 @@ onMounted(load);
 .share-icon-btn,.fullscreen-share-btn{width:auto!important;min-width:72px!important;height:34px!important;padding:0 10px!important;border:1.5px solid #3a2e1f!important;border-radius:10px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;background:#fff!important;color:#3a2e1f!important;box-shadow:2px 2px 0 #3a2e1f!important;font-size:12px!important;font-weight:900!important;line-height:1!important;transform:none!important}.share-icon-btn:hover,.fullscreen-share-btn:hover{background:#fff8e8!important;transform:none!important}.share-icon-btn svg,.fullscreen-share-btn svg{display:block!important;width:15px!important;height:15px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.3!important;stroke-linecap:round!important;stroke-linejoin:round!important}.share-icon-btn span,.fullscreen-share-btn span,.code-fullscreen header .share-icon-btn span{display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;color:inherit!important;font-family:Vazirmatn,sans-serif!important;font-size:12px!important;font-weight:900!important;line-height:1!important;white-space:nowrap!important}
 .view-modal header .share-icon-btn{height:30px!important;min-height:30px!important}
 .share-backdrop{z-index:10000!important;background:rgba(23,19,33,.68)!important;backdrop-filter:blur(3px)}.share-note-modal{position:relative!important;width:340px!important;max-width:calc(100vw - 32px)!important;display:grid;gap:14px;overflow:visible!important;padding:22px!important;text-align:center}.share-close{position:absolute;top:12px;left:12px;width:30px!important;height:30px!important;min-width:0!important;border:2px solid #3a2e1f!important;border-radius:9px!important;background:#fff!important;color:#3a2e1f!important;font-size:18px!important;font-weight:900!important;box-shadow:2px 2px 0 #3a2e1f!important;cursor:pointer}.share-modal-head{display:grid;gap:6px;padding:2px 34px 0}.share-modal-head span{justify-self:center;padding:3px 12px;border:1.5px solid #3a2e1f;border-radius:999px;background:#ffd93d;color:#3a2e1f;font-size:11px;font-weight:900;box-shadow:1px 1px 0 #3a2e1f}.share-modal-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3a2e1f;font-size:16px;font-weight:900}.qr-frame{justify-self:center;padding:12px;border:2px solid #3a2e1f;border-radius:18px;background:#fff;box-shadow:4px 4px 0 #3a2e1f}.qr-frame img{display:block;width:190px;height:190px}.share-link-box{display:grid!important;gap:6px!important;margin:0!important;text-align:right!important}.share-link-box span{color:#8a4b1e!important;font-size:11px!important;font-weight:900!important}.share-link-box input{height:38px!important;border:2px solid #efe3c4!important;border-radius:11px!important;background:#fff!important;color:#3a2e1f!important;text-align:left!important;font-family:"JetBrains Mono",monospace!important;font-size:12px!important;font-weight:800!important}.share-copy-btn{height:40px;border:2px solid #3a2e1f;border-radius:12px;background:#22d3d0;color:#0b4a48;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:900;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.share-copy-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+.image-chip{display:inline-block;margin-inline-start:6px;padding:2px 8px;border-radius:999px;background:#e0f7f6;color:#0b4a48;font-size:10px;font-weight:900}.note-editor-hint{margin:-6px 0 12px;color:#7a6a4f;font-size:11.5px;font-weight:800}.rich-preview{display:block;margin:-2px 0 14px;padding:12px;border:1.5px dashed #d7c9a6;border-radius:12px;background:#fff}.rich-preview p,.rich-text p{margin:0;white-space:pre-wrap}.rich-preview img,.rich-text img{display:block;max-width:100%;max-height:420px;object-fit:contain;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}.rich-text{display:block;white-space:normal!important}.shared-text.rich-text,.full-text.rich-text{white-space:normal!important}
+.editor-panel{position:relative;display:grid;gap:10px}.editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 0}.editor-toolbar>div{display:flex;align-items:center;gap:8px}.editor-toolbar span{color:#7a6a4f;font-size:11.5px;font-weight:800}.editor-toolbar button{height:32px;border:1.5px solid #3a2e1f;border-radius:9px;background:#ffd93d;color:#3a2e1f;padding:0 12px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.word-editor{min-height:260px;max-height:46vh;overflow:auto;padding:18px;border:2px solid #3a2e1f;border-radius:14px;background:#fff;color:#3a2e1f;box-shadow:3px 3px 0 #3a2e1f;font-size:14.5px;line-height:2;outline:0;white-space:pre-wrap}.word-editor:focus{box-shadow:3px 3px 0 #3a2e1f,0 0 0 4px rgba(34,211,208,.22)}.word-editor p{margin:0 0 10px;min-height:1.8em}.word-editor img{display:block;max-width:100%;max-height:420px;object-fit:contain;margin:12px auto;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.word-editor img.selected{border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}.image-delete-btn{position:absolute;left:14px;bottom:14px;z-index:2;height:34px;border:2px solid #3a2e1f;border-radius:10px;background:#fee2e2;color:#991b1b;padding:0 13px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.image-resize-handle{position:absolute;z-index:3;width:22px;height:22px;border:2px solid #3a2e1f;border-radius:7px;background:#ffd93d;box-shadow:2px 2px 0 #3a2e1f;cursor:nwse-resize}.image-resize-handle::before{content:"";position:absolute;inset:5px;border-left:2px solid #3a2e1f;border-bottom:2px solid #3a2e1f}.editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#fffbf0;background-image:radial-gradient(#efe3c4 1px,transparent 1px);background-size:18px 18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}.editor-panel.fullscreen .editor-toolbar{margin:0}.editor-panel.fullscreen .word-editor{min-height:0;max-height:none;height:100%;font-size:16px;line-height:2.15;padding:24px}.editor-panel.fullscreen .image-delete-btn{left:28px;bottom:28px}
+.code-editor-panel{display:grid;gap:10px}.code-editor-panel textarea.code{min-height:220px}.code-toolbar span{font-family:"JetBrains Mono",monospace;color:#ffd93d;background:#2d2540;border-radius:999px;padding:4px 10px}.code-editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#171321;box-shadow:0 24px 60px rgba(0,0,0,.55)}.code-editor-panel.fullscreen .editor-toolbar{margin:0}.code-editor-panel.fullscreen textarea.code{min-height:0;height:100%;max-height:none;resize:none;border:2px solid #3a2e1f;border-radius:14px;background:#0f0b18;color:#f5ead3;font-size:15px;line-height:1.85;padding:20px;box-shadow:3px 3px 0 #3a2e1f}
+.item-modal>footer{margin-top:18px}
 @media(max-width:700px){.notes-page{padding:24px 10px 80px}.notes-sheet{padding:24px 14px 28px;transform:none}.notes-header{align-items:flex-start}.notes-heading{width:100%;flex-wrap:wrap}.notes-heading>div:last-child{width:100%}h1{font-size:25px}.add-group-btn{width:100%;justify-content:center}.note-grid{grid-template-columns:1fr}.note-group-head{gap:8px;padding:12px}.note-group-head strong{font-size:18px}.group-action{width:28px;height:28px}.notes-modal{padding:18px}.modal-backdrop{align-items:flex-start;overflow:auto}.view-modal header{align-items:flex-start;flex-wrap:wrap}.view-modal header h2{width:100%;font-size:20px}.code-fullscreen header{align-items:flex-start;flex-wrap:wrap;padding:10px}.code-fullscreen header>div{width:100%;flex:1 0 100%}.code-fullscreen button{flex:1}.fullscreen-code{padding:16px 12px;font-size:12.5px;line-height:1.8}.fullscreen-text{width:calc(100vw - 20px);margin:12px auto;padding:18px 16px;font-size:15px;line-height:2}}
 </style>

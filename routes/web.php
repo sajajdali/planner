@@ -101,6 +101,7 @@ Route::prefix('api')->group(function () {
         Route::put('/notebook-note-groups/{group}', [PlannerController::class, 'updateNotebookNoteGroup']);
         Route::delete('/notebook-note-groups/{group}', [PlannerController::class, 'destroyNotebookNoteGroup']);
         Route::post('/notebook-notes', [PlannerController::class, 'storeNotebookNote']);
+        Route::post('/notebook-notes/images', [PlannerController::class, 'uploadNotebookNoteImage']);
         Route::put('/notebook-notes/{note}', [PlannerController::class, 'updateNotebookNote']);
         Route::post('/notebook-notes/{note}/share', [PlannerController::class, 'shareNotebookNote']);
         Route::delete('/notebook-notes/{note}', [PlannerController::class, 'destroyNotebookNote']);

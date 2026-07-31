@@ -2030,6 +2030,22 @@ class PlannerController extends Controller
         return $this->notebookNotePayload($note);
     }
 
+    public function uploadNotebookNoteImage(Request $request)
+    {
+        $data = $request->validate([
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+        ]);
+
+        $file = $data['image'];
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
+        $filename = Str::uuid().'.'.$extension;
+        $path = $file->storeAs('notebook-images/'.$request->user()->id, $filename, 'public');
+
+        return [
+            'url' => '/storage/'.$path,
+        ];
+    }
+
     public function updateNotebookNote(Request $request, NotebookNote $note)
     {
         abort_unless($note->user_id === $request->user()->id, 404);
