@@ -13,6 +13,7 @@ type ExpenseCategory = { id: number; name: string; color: string; soft_color: st
 type FinancialAccount = { id: number; name: string; color: string; initial_balance: number; income_total: number; expense_total: number; current_balance: number; is_default?: boolean; is_active: boolean };
 type Expense = { id: number; expense_category_id: number; financial_account_id: number | null; title: string; amount: number; type: 'expense' | 'income'; expense_date: string; note: string | null; category: ExpenseCategory | null; account: { id: number; name: string; color: string } | null };
 type TimeSession = { id: number; started_at: string | null; ended_at: string | null; duration_seconds: number };
+type TimeSessionDraft = { session: TimeSession; started_at: string; ended_at: string; error: string; saving: boolean };
 type MealEntry = { id: number; title: string; meal_date: string; meal_time: string | null; meal_type: string; note: string | null; status: string; sort_order?: number };
 type RoutineItem = { id: number; title: string; color: string; is_default: boolean; done: boolean };
 type Routine = { wake_time: string | null; sleep_time: string | null; items: RoutineItem[] };
@@ -97,6 +98,7 @@ const editingTask = ref<Task | null>(null);
 const descriptionModalTask = ref<Task | null>(null);
 const referModal = ref(false);
 const timeLogTask = ref<Task | null>(null);
+const editingTimeSession = ref<TimeSessionDraft | null>(null);
 const referTaskTarget = ref<Task | null>(null);
 const referDateInput = ref('');
 const referDateError = ref('');
@@ -595,6 +597,25 @@ function timeSessionTotal(task: Task | null) {
     return task?.time_sessions?.reduce((sum, session) => sum + Number(session.duration_seconds || 0), 0) ?? 0;
 }
 
+function applyTaskPayload(updatedTask: Task) {
+    tasks.value = tasks.value.map((task) => {
+        if (task.id === updatedTask.id) return updatedTask;
+
+        if (task.subtasks.some((subtask) => subtask.id === updatedTask.id)) {
+            return {
+                ...task,
+                subtasks: task.subtasks.map((subtask) => subtask.id === updatedTask.id ? updatedTask : subtask),
+            };
+        }
+
+        return task;
+    });
+
+    if (timeLogTask.value?.id === updatedTask.id) {
+        timeLogTask.value = updatedTask;
+    }
+}
+
 function sessionClock(value: string | null) {
     if (!value) return 'ثبت نشده';
     return fa(new Intl.DateTimeFormat('fa-IR', {
@@ -602,6 +623,54 @@ function sessionClock(value: string | null) {
         minute: '2-digit',
         timeZone: 'Asia/Tehran',
     }).format(new Date(value)));
+}
+
+function sessionDateClock(value: string | null) {
+    if (!value) return 'ثبت نشده';
+    return fa(new Intl.DateTimeFormat('fa-IR', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Tehran',
+    }).format(new Date(value)));
+}
+
+function tehranDateTimeInput(value: string | null) {
+    if (!value) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Tehran',
+    }).formatToParts(new Date(value));
+    const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+function dateTimeInputToPayload(value: string) {
+    return en(value).replace('T', ' ');
+}
+
+function timeSessionDraftSeconds() {
+    if (!editingTimeSession.value?.started_at || !editingTimeSession.value?.ended_at) return 0;
+    const start = new Date(editingTimeSession.value.started_at).getTime();
+    const end = new Date(editingTimeSession.value.ended_at).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    return Math.round((end - start) / 1000);
+}
+
+function openTimeSessionEdit(session: TimeSession) {
+    editingTimeSession.value = {
+        session,
+        started_at: tehranDateTimeInput(session.started_at),
+        ended_at: tehranDateTimeInput(session.ended_at),
+        error: '',
+        saving: false,
+    };
 }
 
 function moneyLabel(amount: number) {
@@ -1374,6 +1443,47 @@ async function timer(task: Task, action: string, completeOnStop = false) {
         tasks.value = tasks.value.map((item) => item.id === task.id ? data.task : item);
     } else {
         await loadPlanner();
+    }
+}
+
+async function updateTimeSession() {
+    const draft = editingTimeSession.value;
+    if (!draft) return;
+
+    const start = new Date(draft.started_at).getTime();
+    const end = new Date(draft.ended_at).getTime();
+    if (!draft.started_at || !draft.ended_at || !Number.isFinite(start) || !Number.isFinite(end)) {
+        draft.error = 'شروع و پایان را کامل وارد کنید.';
+        return;
+    }
+    if (end <= start) {
+        draft.error = 'زمان پایان باید از شروع بزرگ‌تر باشد.';
+        return;
+    }
+
+    draft.saving = true;
+    draft.error = '';
+    try {
+        const { data } = await api.put(`/task-time-sessions/${draft.session.id}`, {
+            started_at: dateTimeInputToPayload(draft.started_at),
+            ended_at: dateTimeInputToPayload(draft.ended_at),
+        });
+        applyTaskPayload(data);
+        editingTimeSession.value = null;
+    } catch (error: any) {
+        draft.error = error?.response?.data?.message ?? 'ویرایش کارکرد انجام نشد.';
+    } finally {
+        draft.saving = false;
+    }
+}
+
+async function deleteTimeSession(session: TimeSession) {
+    if (!window.confirm('این کارکرد حذف شود؟')) return;
+
+    const { data } = await api.delete(`/task-time-sessions/${session.id}`);
+    applyTaskPayload(data);
+    if (editingTimeSession.value?.session.id === session.id) {
+        editingTimeSession.value = null;
     }
 }
 
@@ -2768,11 +2878,19 @@ onUnmounted(() => {
                 </header>
 
                 <div v-if="timeLogTask.time_sessions?.length" class="time-log-table">
-                    <div class="time-log-row head"><span>شروع</span><span>پایان</span><span>جمع</span></div>
+                    <div class="time-log-row head"><span>شروع</span><span>پایان</span><span>جمع</span><span></span></div>
                     <div v-for="session in timeLogTask.time_sessions" :key="session.id" class="time-log-row">
-                        <span>{{ sessionClock(session.started_at) }}</span>
-                        <span>{{ sessionClock(session.ended_at) }}</span>
+                        <span :title="sessionDateClock(session.started_at)">{{ sessionClock(session.started_at) }}</span>
+                        <span :title="sessionDateClock(session.ended_at)">{{ sessionClock(session.ended_at) }}</span>
                         <strong>{{ timeLabel(session.duration_seconds) }}</strong>
+                        <div class="time-log-actions">
+                            <button type="button" title="ویرایش" aria-label="ویرایش کارکرد" @click="openTimeSessionEdit(session)">
+                                <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"></path><path d="M13 7l4 4"></path></svg>
+                            </button>
+                            <button type="button" class="danger" title="حذف" aria-label="حذف کارکرد" @click="deleteTimeSession(session)">
+                                <svg viewBox="0 0 24 24"><path d="M5 7h14"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M7 7l1 13h8l1-13"></path><path d="M9 7V4h6v3"></path></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="time-log-total">
                         <span>جمع کل</span>
@@ -2781,6 +2899,35 @@ onUnmounted(() => {
                 </div>
                 <div v-else class="time-log-empty">هنوز کارکرد ثبت‌شده‌ای برای این تسک نیست.</div>
             </section>
+        </div>
+
+        <div v-if="editingTimeSession" class="modal-backdrop">
+            <form class="modal-card time-session-edit-modal" @submit.prevent="updateTimeSession">
+                <header>
+                    <div>
+                        <span>ویرایش کارکرد</span>
+                        <h2>{{ timeLogTask?.title }}</h2>
+                    </div>
+                    <button type="button" aria-label="بستن" @click="editingTimeSession = null">×</button>
+                </header>
+                <label>
+                    شروع
+                    <input v-model="editingTimeSession.started_at" type="datetime-local" required />
+                </label>
+                <label>
+                    پایان
+                    <input v-model="editingTimeSession.ended_at" type="datetime-local" required />
+                </label>
+                <div class="time-session-live-total">
+                    <span>زمان واقعی</span>
+                    <strong>{{ timeLabel(timeSessionDraftSeconds()) }}</strong>
+                </div>
+                <p v-if="editingTimeSession.error" class="time-session-error">{{ editingTimeSession.error }}</p>
+                <div class="modal-actions">
+                    <button type="button" class="ghost" @click="editingTimeSession = null">انصراف</button>
+                    <button type="submit" :disabled="editingTimeSession.saving">{{ editingTimeSession.saving ? 'در حال ذخیره...' : 'ذخیره' }}</button>
+                </div>
+            </form>
         </div>
 
         <div v-if="referModal" class="modal-backdrop">

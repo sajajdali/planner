@@ -1413,6 +1413,41 @@ class PlannerController extends Controller
         return ['timer' => $session->fresh(), 'task' => $this->taskPayload($task->load(['subtasks', 'timeSessions']))];
     }
 
+    public function updateTimeSession(Request $request, TaskTimeSession $session)
+    {
+        abort_unless($session->user_id === $request->user()->id, 403);
+        abort_unless($session->status === 'stopped', 422, 'فقط کارکردهای کامل‌شده قابل ویرایش هستند.');
+
+        $data = $request->validate([
+            'started_at' => ['required', 'date'],
+            'ended_at' => ['required', 'date', 'after:started_at'],
+        ]);
+
+        $timezone = $request->user()->timezone ?? config('app.timezone');
+        $startedAt = Carbon::parse($data['started_at'], $timezone);
+        $endedAt = Carbon::parse($data['ended_at'], $timezone);
+
+        $session->update([
+            'started_at' => $startedAt,
+            'ended_at' => $endedAt,
+            'paused_at' => null,
+            'duration_seconds' => (int) $startedAt->diffInSeconds($endedAt),
+        ]);
+
+        return $this->taskPayload($session->task->load(['subtasks', 'timeSessions']));
+    }
+
+    public function destroyTimeSession(Request $request, TaskTimeSession $session)
+    {
+        abort_unless($session->user_id === $request->user()->id, 403);
+        abort_unless($session->status === 'stopped', 422, 'فقط کارکردهای کامل‌شده قابل حذف هستند.');
+
+        $task = $session->task;
+        $session->delete();
+
+        return $this->taskPayload($task->load(['subtasks', 'timeSessions']));
+    }
+
     public function storeFollowUp(Request $request)
     {
         $priorityKeys = $this->priorityKeys($request->user()->id);

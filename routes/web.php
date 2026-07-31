@@ -66,6 +66,8 @@ Route::prefix('api')->group(function () {
         Route::post('/tasks/{task}/refer', [PlannerController::class, 'referTask']);
         Route::delete('/tasks/{task}', [PlannerController::class, 'destroyTask']);
         Route::post('/tasks/{task}/timer/{action}', [PlannerController::class, 'timer'])->whereIn('action', ['start', 'pause', 'resume', 'stop']);
+        Route::put('/task-time-sessions/{session}', [PlannerController::class, 'updateTimeSession']);
+        Route::delete('/task-time-sessions/{session}', [PlannerController::class, 'destroyTimeSession']);
         Route::post('/follow-ups', [PlannerController::class, 'storeFollowUp']);
         Route::put('/follow-ups/{followUp}', [PlannerController::class, 'updateFollowUp']);
         Route::post('/follow-ups/{followUp}/toggle', [PlannerController::class, 'toggleFollowUp']);
