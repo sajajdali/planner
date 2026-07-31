@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
@@ -89,16 +89,16 @@ function noteImageMarkupPattern() {
 }
 
 function imageMeta(rawAlt: string) {
-    const widthMatch = rawAlt.match(/\|w=(\d{1,3})$/);
+    const widthMatch = rawAlt.match(/\|w=(\d{1,3})/);
     const width = widthMatch ? Math.min(100, Math.max(15, Number(widthMatch[1]))) : null;
     return {
-        alt: (widthMatch ? rawAlt.slice(0, widthMatch.index) : rawAlt) || 'تصویر یادداشت',
+        alt: rawAlt.replace(/\|[wh]=\d{1,4}/g, '') || 'تصویر یادداشت',
         width,
     };
 }
 
 function imageAltWithWidth(image: HTMLImageElement) {
-    const alt = (image.dataset.noteAlt || image.alt || 'image').replace(/\|w=\d{1,3}$/, '');
+    const alt = (image.dataset.noteAlt || image.alt || 'image').replace(/\|[wh]=\d{1,4}/g, '');
     const width = image.dataset.noteWidth;
     return width ? `${alt}|w=${width}` : alt;
 }
@@ -155,11 +155,17 @@ function renderRichEditor() {
             image.loading = 'lazy';
             image.contentEditable = 'false';
             image.dataset.noteImage = 'true';
+            image.draggable = false;
+            image.addEventListener('pointerdown', (event) => {
+                event.stopPropagation();
+                selectEditorImage(image);
+            });
             if (segment.width) {
                 image.dataset.noteWidth = String(segment.width);
                 frame.style.width = `${segment.width}%`;
             }
             image.style.width = '100%';
+            image.style.height = 'auto';
             frame.appendChild(image);
             addImageResizeHandles(frame);
             editor.appendChild(frame);
@@ -199,6 +205,12 @@ function addImageResizeHandles(frame: HTMLElement) {
         handle.className = `image-corner-handle ${corner}`;
         handle.dataset.resizeCorner = corner;
         handle.setAttribute('aria-label', 'تغییر اندازه عکس');
+        handle.addEventListener('pointerdown', (event) => {
+            const image = handle.closest('.editor-image-frame')?.querySelector('img');
+            if (!image) return;
+            selectEditorImage(image);
+            startImageResize(event, corner);
+        });
         frame.appendChild(handle);
     });
 }
@@ -366,8 +378,14 @@ function insertRichImage(url: string) {
     image.loading = 'lazy';
     image.contentEditable = 'false';
     image.dataset.noteImage = 'true';
+    image.draggable = false;
+    image.addEventListener('pointerdown', (event) => {
+        event.stopPropagation();
+        selectEditorImage(image);
+    });
     image.dataset.noteWidth = '70';
     image.style.width = '100%';
+    image.style.height = 'auto';
     frame.style.width = '70%';
     frame.appendChild(image);
     addImageResizeHandles(frame);
@@ -591,19 +609,23 @@ function handleRichEditorInput() {
 
 function handleRichEditorClick(event: MouseEvent) {
     const target = event.target;
-    if (target instanceof HTMLElement && target.dataset.resizeCorner) {
-        const image = target.closest('.editor-image-frame')?.querySelector('img');
-        if (image) {
-            selectEditorImage(image);
-            startImageResize(event, target.dataset.resizeCorner as 'nw' | 'ne' | 'sw' | 'se');
-        }
-        return;
-    }
+    if (target instanceof HTMLElement && target.dataset.resizeCorner) return;
     if (target instanceof HTMLImageElement && target.dataset.noteImage === 'true') {
         selectEditorImage(target);
         return;
     }
     clearSelectedEditorImage();
+}
+
+function handleRichEditorPointerDown(event: PointerEvent) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.dataset.resizeCorner) return;
+
+    const image = target.closest('.editor-image-frame')?.querySelector('img');
+    if (!image) return;
+
+    selectEditorImage(image);
+    startImageResize(event, target.dataset.resizeCorner as 'nw' | 'ne' | 'sw' | 'se');
 }
 
 function deleteSelectedEditorImage() {
@@ -623,7 +645,7 @@ function deleteSelectedEditorImage() {
     }
 }
 
-function startImageResize(event: MouseEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
+function startImageResize(event: PointerEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
     const image = selectedEditorImage.value;
     const editor = richEditorRef.value;
     if (!image || !editor) return;
@@ -638,11 +660,11 @@ function startImageResize(event: MouseEvent, corner: 'nw' | 'ne' | 'sw' | 'se') 
         corner,
     };
 
-    window.addEventListener('mousemove', handleImageResize);
-    window.addEventListener('mouseup', stopImageResize, { once: true });
+    window.addEventListener('pointermove', handleImageResize);
+    window.addEventListener('pointerup', stopImageResize, { once: true });
 }
 
-function handleImageResize(event: MouseEvent) {
+function handleImageResize(event: PointerEvent) {
     const resizing = resizingImage.value;
     if (!resizing) return;
 
@@ -651,6 +673,7 @@ function handleImageResize(event: MouseEvent) {
     const nextPixels = Math.min(resizing.editorWidth, Math.max(120, resizing.startWidth + delta));
     const width = Math.min(100, Math.max(15, Math.round((nextPixels / resizing.editorWidth) * 100)));
     resizing.image.dataset.noteWidth = String(width);
+    resizing.image.style.height = 'auto';
     const frame = resizing.image.closest<HTMLElement>('.editor-image-frame');
     if (frame) frame.style.width = `${width}%`;
 }
@@ -659,7 +682,7 @@ function stopImageResize() {
     if (!resizingImage.value) return;
     serializeRichEditor();
     resizingImage.value = null;
-    window.removeEventListener('mousemove', handleImageResize);
+    window.removeEventListener('pointermove', handleImageResize);
 }
 
 function handleRichEditorKeydown(event: KeyboardEvent) {
@@ -680,6 +703,26 @@ function toggleNoteEditorFullscreen() {
 
 function toggleCodeEditorFullscreen() {
     codeEditorFullscreen.value = !codeEditorFullscreen.value;
+}
+
+function closeFullscreenEditors() {
+    if (!noteEditorFullscreen.value && !codeEditorFullscreen.value) return;
+
+    noteEditorFullscreen.value = false;
+    codeEditorFullscreen.value = false;
+    void nextTick(() => {
+        if (noteForm.value.content_type === 'text') {
+            renderRichEditor();
+        }
+    });
+}
+
+function handleGlobalKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    if (!noteEditorFullscreen.value && !codeEditorFullscreen.value) return;
+
+    event.preventDefault();
+    closeFullscreenEditors();
 }
 
 watch(() => noteForm.value.content_type, async (type) => {
@@ -770,7 +813,14 @@ function askDeleteGroup(group: NoteGroup) {
     };
 }
 
-onMounted(load);
+onMounted(() => {
+    window.addEventListener('keydown', handleGlobalKeydown);
+    void load();
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleGlobalKeydown);
+});
 </script>
 
 <template>
@@ -921,6 +971,7 @@ onMounted(load);
                         data-placeholder="متن خودت را اینجا بنویس یا عکس را paste کن..."
                         @input="handleRichEditorInput"
                         @click="handleRichEditorClick"
+                        @pointerdown="handleRichEditorPointerDown"
                         @keydown="handleRichEditorKeydown"
                         @paste="handleNotePaste"
                     ></div>
@@ -1041,11 +1092,20 @@ onMounted(load);
 .share-icon-btn,.fullscreen-share-btn{width:auto!important;min-width:72px!important;height:34px!important;padding:0 10px!important;border:1.5px solid #3a2e1f!important;border-radius:10px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;background:#fff!important;color:#3a2e1f!important;box-shadow:2px 2px 0 #3a2e1f!important;font-size:12px!important;font-weight:900!important;line-height:1!important;transform:none!important}.share-icon-btn:hover,.fullscreen-share-btn:hover{background:#fff8e8!important;transform:none!important}.share-icon-btn svg,.fullscreen-share-btn svg{display:block!important;width:15px!important;height:15px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.3!important;stroke-linecap:round!important;stroke-linejoin:round!important}.share-icon-btn span,.fullscreen-share-btn span,.code-fullscreen header .share-icon-btn span{display:block!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;color:inherit!important;font-family:Vazirmatn,sans-serif!important;font-size:12px!important;font-weight:900!important;line-height:1!important;white-space:nowrap!important}
 .view-modal header .share-icon-btn{height:30px!important;min-height:30px!important}
 .share-backdrop{z-index:10000!important;background:rgba(23,19,33,.68)!important;backdrop-filter:blur(3px)}.share-note-modal{position:relative!important;width:340px!important;max-width:calc(100vw - 32px)!important;display:grid;gap:14px;overflow:visible!important;padding:22px!important;text-align:center}.share-close{position:absolute;top:12px;left:12px;width:30px!important;height:30px!important;min-width:0!important;border:2px solid #3a2e1f!important;border-radius:9px!important;background:#fff!important;color:#3a2e1f!important;font-size:18px!important;font-weight:900!important;box-shadow:2px 2px 0 #3a2e1f!important;cursor:pointer}.share-modal-head{display:grid;gap:6px;padding:2px 34px 0}.share-modal-head span{justify-self:center;padding:3px 12px;border:1.5px solid #3a2e1f;border-radius:999px;background:#ffd93d;color:#3a2e1f;font-size:11px;font-weight:900;box-shadow:1px 1px 0 #3a2e1f}.share-modal-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3a2e1f;font-size:16px;font-weight:900}.qr-frame{justify-self:center;padding:12px;border:2px solid #3a2e1f;border-radius:18px;background:#fff;box-shadow:4px 4px 0 #3a2e1f}.qr-frame img{display:block;width:190px;height:190px}.share-link-box{display:grid!important;gap:6px!important;margin:0!important;text-align:right!important}.share-link-box span{color:#8a4b1e!important;font-size:11px!important;font-weight:900!important}.share-link-box input{height:38px!important;border:2px solid #efe3c4!important;border-radius:11px!important;background:#fff!important;color:#3a2e1f!important;text-align:left!important;font-family:"JetBrains Mono",monospace!important;font-size:12px!important;font-weight:800!important}.share-copy-btn{height:40px;border:2px solid #3a2e1f;border-radius:12px;background:#22d3d0;color:#0b4a48;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:900;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.share-copy-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
-.image-chip{display:inline-block;margin-inline-start:6px;padding:2px 8px;border-radius:999px;background:#e0f7f6;color:#0b4a48;font-size:10px;font-weight:900}.note-editor-hint{margin:-6px 0 12px;color:#7a6a4f;font-size:11.5px;font-weight:800}.rich-preview{display:block;margin:-2px 0 14px;padding:12px;border:1.5px dashed #d7c9a6;border-radius:12px;background:#fff}.rich-preview p,.rich-text p{margin:0;white-space:pre-wrap}.rich-preview img,.rich-text img{display:block;max-width:100%;max-height:420px;object-fit:contain;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}.rich-text{display:block;white-space:normal!important}.shared-text.rich-text,.full-text.rich-text{white-space:normal!important}
-.editor-panel{position:relative;display:grid;gap:10px}.editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 0}.editor-toolbar>div{display:flex;align-items:center;gap:8px}.editor-toolbar span{color:#7a6a4f;font-size:11.5px;font-weight:800}.editor-toolbar button{height:32px;border:1.5px solid #3a2e1f;border-radius:9px;background:#ffd93d;color:#3a2e1f;padding:0 12px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.word-editor{min-height:260px;max-height:46vh;overflow:auto;padding:18px;border:2px solid #3a2e1f;border-radius:14px;background:#fff;color:#3a2e1f;box-shadow:3px 3px 0 #3a2e1f;font-size:14.5px;line-height:2;outline:0;white-space:pre-wrap;overscroll-behavior:contain}.word-editor:focus{box-shadow:3px 3px 0 #3a2e1f,0 0 0 4px rgba(34,211,208,.22)}.word-editor p{margin:0 0 10px;min-height:1.8em}.editor-image-frame{position:relative;display:block;width:70%;max-width:100%;margin:12px auto;line-height:0}.editor-image-frame img{display:block;width:100%;max-width:100%;max-height:420px;object-fit:contain;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.editor-image-frame.selected img{border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}.image-corner-handle{position:absolute;z-index:4;display:none;width:16px;height:16px;border:2px solid #3a2e1f;border-radius:5px;background:#ffd93d;box-shadow:1px 1px 0 #3a2e1f;cursor:nwse-resize}.editor-image-frame.selected .image-corner-handle{display:block}.image-corner-handle.nw{top:-8px;left:-8px}.image-corner-handle.ne{top:-8px;right:-8px;cursor:nesw-resize}.image-corner-handle.sw{bottom:-8px;left:-8px;cursor:nesw-resize}.image-corner-handle.se{right:-8px;bottom:-8px}.image-delete-btn{position:absolute;left:14px;bottom:14px;z-index:2;height:34px;border:2px solid #3a2e1f;border-radius:10px;background:#fee2e2;color:#991b1b;padding:0 13px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;overflow:hidden;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#fffbf0;background-image:radial-gradient(#efe3c4 1px,transparent 1px);background-size:18px 18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}.editor-panel.fullscreen .editor-toolbar{margin:0}.editor-panel.fullscreen .word-editor{min-height:0;max-height:none;height:100%;overflow:auto;font-size:16px;line-height:2.15;padding:24px}.editor-panel.fullscreen .image-delete-btn{left:28px;bottom:28px}
+.image-chip{display:inline-block;margin-inline-start:6px;padding:2px 8px;border-radius:999px;background:#e0f7f6;color:#0b4a48;font-size:10px;font-weight:900}.note-editor-hint{margin:-6px 0 12px;color:#7a6a4f;font-size:11.5px;font-weight:800}.rich-preview{display:block;margin:-2px 0 14px;padding:12px;border:1.5px dashed #d7c9a6;border-radius:12px;background:#fff}.rich-preview p,.rich-text p{margin:0;white-space:pre-wrap}.rich-preview img,.rich-text img{display:block;max-width:100%;max-height:none;height:auto;object-fit:contain;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}.rich-text{display:block;white-space:normal!important}.shared-text.rich-text,.full-text.rich-text{white-space:normal!important}
+.editor-panel{position:relative;display:grid;gap:10px}.editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 0}.editor-toolbar>div{display:flex;align-items:center;gap:8px}.editor-toolbar span{color:#7a6a4f;font-size:11.5px;font-weight:800}.editor-toolbar button{height:32px;border:1.5px solid #3a2e1f;border-radius:9px;background:#ffd93d;color:#3a2e1f;padding:0 12px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.word-editor{min-height:260px;max-height:46vh;overflow:auto;padding:18px;border:2px solid #3a2e1f;border-radius:14px;background:#fff;color:#3a2e1f;box-shadow:3px 3px 0 #3a2e1f;font-size:14.5px;line-height:2;outline:0;white-space:pre-wrap;overscroll-behavior:contain}.word-editor:focus{box-shadow:3px 3px 0 #3a2e1f,0 0 0 4px rgba(34,211,208,.22)}.word-editor p{margin:0 0 10px;min-height:1.8em}.editor-image-frame{position:relative;display:block;width:70%;max-width:100%;margin:12px auto;line-height:0}.editor-image-frame img{display:block;width:100%;max-width:100%;max-height:none;height:auto;object-fit:contain;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer}.editor-image-frame.selected img{border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}.image-corner-handle{position:absolute;z-index:4;display:none;width:16px;height:16px;border:2px solid #3a2e1f;border-radius:5px;background:#ffd93d;box-shadow:1px 1px 0 #3a2e1f;cursor:nwse-resize;touch-action:none}.editor-image-frame.selected .image-corner-handle{display:block}.image-corner-handle.nw{top:-8px;left:-8px}.image-corner-handle.ne{top:-8px;right:-8px;cursor:nesw-resize}.image-corner-handle.sw{bottom:-8px;left:-8px;cursor:nesw-resize}.image-corner-handle.se{right:-8px;bottom:-8px}.image-delete-btn{position:absolute;left:14px;bottom:14px;z-index:2;height:34px;border:2px solid #3a2e1f;border-radius:10px;background:#fee2e2;color:#991b1b;padding:0 13px;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f;cursor:pointer}.editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;overflow:hidden;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#fffbf0;background-image:radial-gradient(#efe3c4 1px,transparent 1px);background-size:18px 18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}.editor-panel.fullscreen .editor-toolbar{margin:0}.editor-panel.fullscreen .word-editor{min-height:0;max-height:none;height:100%;overflow:auto;font-size:16px;line-height:2.15;padding:24px}.editor-panel.fullscreen .image-delete-btn{left:28px;bottom:28px}
 .code-editor-panel{display:grid;gap:10px}.code-editor-panel textarea.code{min-height:220px}.code-toolbar span{font-family:"JetBrains Mono",monospace;color:#ffd93d;background:#2d2540;border-radius:999px;padding:4px 10px}.code-editor-panel.fullscreen{position:fixed;inset:14px;z-index:12000;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding:18px;border:3px solid #3a2e1f;border-radius:18px;background:#171321;box-shadow:0 24px 60px rgba(0,0,0,.55)}.code-editor-panel.fullscreen .editor-toolbar{margin:0}.code-editor-panel.fullscreen textarea.code{min-height:0;height:100%;max-height:none;resize:none;border:2px solid #3a2e1f;border-radius:14px;background:#0f0b18;color:#f5ead3;font-size:15px;line-height:1.85;padding:20px;box-shadow:3px 3px 0 #3a2e1f}
 .item-modal>footer{margin-top:18px}
 :global(body.note-editor-scroll-lock){overflow:hidden!important;overscroll-behavior:none}
+.word-editor :deep(.editor-image-frame){position:relative;display:block;width:70%;max-width:100%;margin:12px auto;line-height:0}
+.word-editor :deep(.editor-image-frame img){display:block;width:100%;max-width:100%;max-height:none;height:auto;object-fit:contain;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer;user-select:none}
+.word-editor :deep(.editor-image-frame.selected img){border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}
+.word-editor :deep(.image-corner-handle){position:absolute;z-index:4;display:none;width:18px;height:18px;min-width:18px;padding:0;border:2px solid #3a2e1f;border-radius:5px;background:#ffd93d;box-shadow:1px 1px 0 #3a2e1f;cursor:nwse-resize;touch-action:none;pointer-events:auto}
+.word-editor :deep(.editor-image-frame.selected .image-corner-handle){display:block}
+.word-editor :deep(.image-corner-handle.nw){top:-9px;left:-9px}
+.word-editor :deep(.image-corner-handle.ne){top:-9px;right:-9px;cursor:nesw-resize}
+.word-editor :deep(.image-corner-handle.sw){bottom:-9px;left:-9px;cursor:nesw-resize}
+.word-editor :deep(.image-corner-handle.se){right:-9px;bottom:-9px}
 .mobile-image-insert{display:grid;position:absolute;right:12px;bottom:12px;z-index:3;width:30px;height:30px;border:1.5px solid #3a2e1f;border-radius:9px;background:rgba(255,255,255,.92);color:#3a2e1f;box-shadow:2px 2px 0 rgba(58,46,31,.65);place-items:center;cursor:pointer}.mobile-image-insert svg,.image-source-actions svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.image-source-backdrop{z-index:13000!important}.image-source-modal{width:320px!important;display:grid;gap:12px;text-align:right}.image-source-modal h2{margin-bottom:0}.image-source-modal p{color:#7a6a4f;font-size:12.5px;font-weight:800}.image-source-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.image-source-actions button{height:58px;border:2px solid #3a2e1f;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:900;box-shadow:2px 2px 0 #3a2e1f}.image-source-actions button:first-child{background:#ffd93d}.image-source-actions button:last-child{background:#e0f7f6}
 @media(max-width:700px){.notes-page{padding:24px 10px 80px}.notes-sheet{padding:24px 14px 28px;transform:none}.notes-header{align-items:flex-start}.notes-heading{width:100%;flex-wrap:wrap}.notes-heading>div:last-child{width:100%}h1{font-size:25px}.add-group-btn{width:100%;justify-content:center}.note-grid{grid-template-columns:1fr}.note-group-head{gap:8px;padding:12px}.note-group-head strong{font-size:18px}.group-action{width:28px;height:28px}.notes-modal{padding:18px}.modal-backdrop{align-items:flex-start;overflow:auto}.view-modal header{align-items:flex-start;flex-wrap:wrap}.view-modal header h2{width:100%;font-size:20px}.code-fullscreen header{align-items:flex-start;flex-wrap:wrap;padding:10px}.code-fullscreen header>div{width:100%;flex:1 0 100%}.code-fullscreen button{flex:1}.fullscreen-code{padding:16px 12px;font-size:12.5px;line-height:1.8}.fullscreen-text{width:calc(100vw - 20px);margin:12px auto;padding:18px 16px;font-size:15px;line-height:2}}
 @media(max-width:700px){.editor-panel.fullscreen{inset:8px;height:calc(100dvh - 16px);padding:10px;border-radius:14px}.editor-panel.fullscreen .editor-toolbar{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}.editor-panel.fullscreen .editor-toolbar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}.editor-panel.fullscreen .editor-toolbar>div{gap:6px}.editor-panel.fullscreen .editor-toolbar button{width:70px;height:34px;padding:0 6px;font-size:11px;line-height:1.15;white-space:normal}.editor-panel.fullscreen .word-editor{padding:16px;font-size:15px;touch-action:pan-y;-webkit-overflow-scrolling:touch}.editor-panel.fullscreen .image-delete-btn{left:18px;bottom:18px}}
