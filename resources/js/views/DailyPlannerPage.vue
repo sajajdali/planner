@@ -173,6 +173,10 @@ function closeViewMenuOnOutsideClick(event: MouseEvent) {
     viewMenuOpen.value = false;
 }
 
+watch(trelloFullscreen, (isFullscreen) => {
+    document.body.classList.toggle('trello-scroll-lock', isFullscreen);
+}, { immediate: true });
+
 const summary = computed(() => {
     const total = tasks.value.length;
     const done = tasks.value.filter((task) => task.status === 'done').length;
@@ -1899,6 +1903,7 @@ onUnmounted(() => {
     document.removeEventListener('click', closeCalendarOnOutsideClick, true);
     document.removeEventListener('click', closeReferCalendarOnOutsideClick, true);
     document.removeEventListener('click', closeViewMenuOnOutsideClick, true);
+    document.body.classList.remove('trello-scroll-lock');
     if (timerInterval) window.clearInterval(timerInterval);
     if (financeNoticeTimer) window.clearTimeout(financeNoticeTimer);
 });

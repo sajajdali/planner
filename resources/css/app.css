@@ -5068,6 +5068,7 @@ body {
     border-radius: 0;
     box-shadow: none;
     overflow: hidden;
+    overscroll-behavior: none;
 }
 
 .trello-board-card.fullscreen .section-head {
@@ -5081,6 +5082,8 @@ body {
     overflow-x: auto;
     overflow-y: hidden;
     padding-bottom: 14px;
+    overscroll-behavior: contain;
+    touch-action: pan-x;
 }
 
 .trello-board-card.fullscreen .trello-list {
@@ -5092,6 +5095,13 @@ body {
 .trello-board-card.fullscreen .trello-cards {
     flex: 1;
     min-height: 0;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+}
+
+body.trello-scroll-lock {
+    overflow: hidden !important;
+    overscroll-behavior: none;
 }
 
 .trello-board {
