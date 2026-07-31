@@ -14,6 +14,7 @@ type FinancialAccount = { id: number; name: string; color: string; initial_balan
 type Expense = { id: number; expense_category_id: number; financial_account_id: number | null; title: string; amount: number; type: 'expense' | 'income'; expense_date: string; note: string | null; category: ExpenseCategory | null; account: { id: number; name: string; color: string } | null };
 type TimeSession = { id: number; started_at: string | null; ended_at: string | null; duration_seconds: number };
 type TimeSessionDraft = { session: TimeSession; started_date: string; started_time: string; ended_date: string; ended_time: string; error: string; saving: boolean };
+type NewTimeSessionDraft = { started_date: string; started_time: string; ended_date: string; ended_time: string; error: string; saving: boolean };
 type MealEntry = { id: number; title: string; meal_date: string; meal_time: string | null; meal_type: string; note: string | null; status: string; sort_order?: number };
 type RoutineItem = { id: number; title: string; color: string; is_default: boolean; done: boolean };
 type Routine = { wake_time: string | null; sleep_time: string | null; items: RoutineItem[] };
@@ -99,6 +100,8 @@ const descriptionModalTask = ref<Task | null>(null);
 const referModal = ref(false);
 const timeLogTask = ref<Task | null>(null);
 const editingTimeSession = ref<TimeSessionDraft | null>(null);
+const addTimeSessionOpen = ref(false);
+const newTimeSession = ref<NewTimeSessionDraft>({ started_date: date.value, started_time: '', ended_date: date.value, ended_time: '', error: '', saving: false });
 const referTaskTarget = ref<Task | null>(null);
 const referDateInput = ref('');
 const referDateError = ref('');
@@ -666,6 +669,45 @@ function dateTimePartsToPayload(dateValue: string, timeValue: string) {
 function timeSessionDraftSeconds() {
     const draft = editingTimeSession.value;
     if (!draft) return 0;
+    const startedAt = composeDateTime(draft.started_date, draft.started_time);
+    const endedAt = composeDateTime(draft.ended_date, draft.ended_time);
+    if (!startedAt || !endedAt) return 0;
+    const start = new Date(startedAt).getTime();
+    const end = new Date(endedAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    return Math.round((end - start) / 1000);
+}
+
+function resetNewTimeSession(task: Task | null = timeLogTask.value) {
+    const sessionDate = task?.task_date || date.value;
+    addTimeSessionOpen.value = false;
+    newTimeSession.value = {
+        started_date: sessionDate,
+        started_time: '',
+        ended_date: sessionDate,
+        ended_time: '',
+        error: '',
+        saving: false,
+    };
+}
+
+function toggleAddTimeSession() {
+    if (!addTimeSessionOpen.value) {
+        const sessionDate = timeLogTask.value?.task_date || date.value;
+        newTimeSession.value = {
+            started_date: sessionDate,
+            started_time: '',
+            ended_date: sessionDate,
+            ended_time: '',
+            error: '',
+            saving: false,
+        };
+    }
+    addTimeSessionOpen.value = !addTimeSessionOpen.value;
+}
+
+function newTimeSessionSeconds() {
+    const draft = newTimeSession.value;
     const startedAt = composeDateTime(draft.started_date, draft.started_time);
     const endedAt = composeDateTime(draft.ended_date, draft.ended_time);
     if (!startedAt || !endedAt) return 0;
@@ -1495,6 +1537,40 @@ async function updateTimeSession() {
     }
 }
 
+async function storeTimeSession() {
+    const task = timeLogTask.value;
+    if (!task) return;
+
+    const draft = newTimeSession.value;
+    const startedAt = composeDateTime(draft.started_date, draft.started_time);
+    const endedAt = composeDateTime(draft.ended_date, draft.ended_time);
+    const start = new Date(startedAt).getTime();
+    const end = new Date(endedAt).getTime();
+    if (!startedAt || !endedAt || !Number.isFinite(start) || !Number.isFinite(end)) {
+        draft.error = 'روز و ساعت شروع و پایان را کامل وارد کنید.';
+        return;
+    }
+    if (end <= start) {
+        draft.error = 'ساعت پایان باید از شروع بزرگ‌تر باشد.';
+        return;
+    }
+
+    draft.saving = true;
+    draft.error = '';
+    try {
+        const { data } = await api.post(`/tasks/${task.id}/time-sessions`, {
+            started_at: dateTimePartsToPayload(draft.started_date, draft.started_time),
+            ended_at: dateTimePartsToPayload(draft.ended_date, draft.ended_time),
+        });
+        applyTaskPayload(data);
+        resetNewTimeSession(data);
+    } catch (error: any) {
+        draft.error = error?.response?.data?.message ?? 'افزودن کارکرد انجام نشد.';
+    } finally {
+        draft.saving = false;
+    }
+}
+
 async function deleteTimeSession(session: TimeSession) {
     if (!window.confirm('این کارکرد حذف شود؟')) return;
 
@@ -1785,6 +1861,10 @@ watch(selectedCategory, () => {
     if (!selectedCategoryGroups.value.some((group) => String(group.id) === newTask.value.task_group_id)) {
         newTask.value.task_group_id = '';
     }
+});
+
+watch(timeLogTask, (task) => {
+    resetNewTimeSession(task);
 });
 
 watch(dueNotifications, (items) => {
@@ -2892,8 +2972,41 @@ onUnmounted(() => {
                         <span>گزارش کارکرد</span>
                         <h2>{{ timeLogTask.title }}</h2>
                     </div>
-                    <button type="button" aria-label="بستن" @click="timeLogTask = null">×</button>
+                    <div class="time-log-header-actions">
+                        <button type="button" class="mini-add-time" :class="{ active: addTimeSessionOpen }" @click="toggleAddTimeSession">+ افزودن ساعت</button>
+                        <button type="button" aria-label="بستن" @click="timeLogTask = null">×</button>
+                    </div>
                 </header>
+
+                <form v-if="addTimeSessionOpen" class="manual-time-form" @submit.prevent="storeTimeSession">
+                    <div class="manual-time-grid">
+                        <label>
+                            روز شروع
+                            <PersianDatePicker v-model="newTimeSession.started_date" placeholder="روز شروع" />
+                        </label>
+                        <label>
+                            ساعت شروع
+                            <span class="time-input"><input v-model="newTimeSession.started_time" type="time" required /></span>
+                        </label>
+                        <label>
+                            روز پایان
+                            <PersianDatePicker v-model="newTimeSession.ended_date" placeholder="روز پایان" />
+                        </label>
+                        <label>
+                            ساعت پایان
+                            <span class="time-input"><input v-model="newTimeSession.ended_time" type="time" required /></span>
+                        </label>
+                    </div>
+                    <div class="manual-time-summary">
+                        <span>جمع این بازه</span>
+                        <strong>{{ timeLabel(newTimeSessionSeconds()) }}</strong>
+                    </div>
+                    <p v-if="newTimeSession.error" class="time-session-error">{{ newTimeSession.error }}</p>
+                    <div class="manual-time-actions">
+                        <button type="button" class="ghost" @click="resetNewTimeSession()">انصراف</button>
+                        <button type="submit" :disabled="newTimeSession.saving">{{ newTimeSession.saving ? 'در حال ثبت...' : 'ثبت' }}</button>
+                    </div>
+                </form>
 
                 <div v-if="timeLogTask.time_sessions?.length" class="time-log-table">
                     <div class="time-log-row head"><span>شروع</span><span>پایان</span><span>جمع</span><span></span></div>

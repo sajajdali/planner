@@ -1413,6 +1413,32 @@ class PlannerController extends Controller
         return ['timer' => $session->fresh(), 'task' => $this->taskPayload($task->load(['subtasks', 'timeSessions']))];
     }
 
+    public function storeTimeSession(Request $request, Task $task)
+    {
+        $this->authorizeTask($request, $task);
+
+        $data = $request->validate([
+            'started_at' => ['required', 'date'],
+            'ended_at' => ['required', 'date', 'after:started_at'],
+        ]);
+
+        $timezone = $request->user()->timezone ?? config('app.timezone');
+        $startedAt = Carbon::parse($data['started_at'], $timezone);
+        $endedAt = Carbon::parse($data['ended_at'], $timezone);
+
+        TaskTimeSession::create([
+            'user_id' => $request->user()->id,
+            'task_id' => $task->id,
+            'started_at' => $startedAt,
+            'ended_at' => $endedAt,
+            'paused_at' => null,
+            'duration_seconds' => (int) $startedAt->diffInSeconds($endedAt),
+            'status' => 'stopped',
+        ]);
+
+        return $this->taskPayload($task->load(['subtasks', 'timeSessions']));
+    }
+
     public function updateTimeSession(Request $request, TaskTimeSession $session)
     {
         abort_unless($session->user_id === $request->user()->id, 403);

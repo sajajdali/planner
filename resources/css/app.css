@@ -3005,6 +3005,110 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     font-weight: 900;
 }
 
+.time-log-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.time-log-modal header .mini-add-time {
+    width: auto;
+    min-width: 0;
+    height: 30px;
+    padding: 0 10px;
+    border-color: #14b8a6;
+    border-radius: 999px;
+    background: #e8fff8;
+    box-shadow: 1px 1px 0 #14b8a6;
+    color: #0f766e;
+    font-size: 11px;
+}
+
+.time-log-modal header .mini-add-time.active {
+    background: #14b8a6;
+    color: #fff;
+}
+
+.manual-time-form {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 2px solid #14b8a6;
+    border-radius: 16px;
+    background: #f4fffb;
+}
+
+.manual-time-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.manual-time-form label {
+    display: grid;
+    gap: 6px;
+    color: #3a2e1f;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.manual-time-form .persian-date-picker,
+.manual-time-form .persian-date-input,
+.manual-time-form .time-input,
+.manual-time-form input {
+    width: 100%;
+}
+
+.manual-time-form .persian-date-input,
+.manual-time-form input {
+    height: 38px;
+    border: 2px solid #d8efe4;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: none;
+}
+
+.manual-time-form input {
+    box-sizing: border-box;
+    padding: 0 10px;
+    color: #3a2e1f;
+    font: 800 13px Vazirmatn, sans-serif;
+    direction: ltr;
+}
+
+.manual-time-summary,
+.manual-time-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.manual-time-summary {
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: #3a2e1f;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.manual-time-actions button {
+    height: 32px;
+    border: 2px solid #3a2e1f;
+    border-radius: 10px;
+    background: #14b8a6;
+    box-shadow: 2px 2px 0 #3a2e1f;
+    color: #fff;
+    padding: 0 13px;
+    font-weight: 900;
+}
+
+.manual-time-actions .ghost {
+    background: #fff;
+    color: #3a2e1f;
+}
+
 .time-log-table {
     display: grid;
     gap: 8px;
@@ -3202,6 +3306,18 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
 }
 
 @media (max-width: 640px) {
+    .time-log-modal header {
+        align-items: flex-start;
+    }
+
+    .time-log-header-actions {
+        flex-shrink: 0;
+    }
+
+    .manual-time-grid {
+        grid-template-columns: 1fr;
+    }
+
     .time-log-row {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(70px, .8fr) 62px;
         gap: 6px;
