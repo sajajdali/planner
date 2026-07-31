@@ -13,7 +13,7 @@ type ExpenseCategory = { id: number; name: string; color: string; soft_color: st
 type FinancialAccount = { id: number; name: string; color: string; initial_balance: number; income_total: number; expense_total: number; current_balance: number; is_default?: boolean; is_active: boolean };
 type Expense = { id: number; expense_category_id: number; financial_account_id: number | null; title: string; amount: number; type: 'expense' | 'income'; expense_date: string; note: string | null; category: ExpenseCategory | null; account: { id: number; name: string; color: string } | null };
 type TimeSession = { id: number; started_at: string | null; ended_at: string | null; duration_seconds: number };
-type TimeSessionDraft = { session: TimeSession; started_at: string; ended_at: string; error: string; saving: boolean };
+type TimeSessionDraft = { session: TimeSession; started_date: string; started_time: string; ended_date: string; ended_time: string; error: string; saving: boolean };
 type MealEntry = { id: number; title: string; meal_date: string; meal_time: string | null; meal_type: string; note: string | null; status: string; sort_order?: number };
 type RoutineItem = { id: number; title: string; color: string; is_default: boolean; done: boolean };
 type Routine = { wake_time: string | null; sleep_time: string | null; items: RoutineItem[] };
@@ -636,7 +636,7 @@ function sessionDateClock(value: string | null) {
     }).format(new Date(value)));
 }
 
-function tehranDateTimeInput(value: string | null) {
+function tehranDateTimeParts(value: string | null) {
     if (!value) return '';
     const parts = new Intl.DateTimeFormat('en-CA', {
         year: 'numeric',
@@ -648,26 +648,42 @@ function tehranDateTimeInput(value: string | null) {
         timeZone: 'Asia/Tehran',
     }).formatToParts(new Date(value));
     const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+    return {
+        date: `${get('year')}-${get('month')}-${get('day')}`,
+        time: `${get('hour')}:${get('minute')}`,
+    };
 }
 
-function dateTimeInputToPayload(value: string) {
-    return en(value).replace('T', ' ');
+function composeDateTime(dateValue: string, timeValue: string) {
+    if (!dateValue || !timeValue) return '';
+    return `${dateValue}T${en(timeValue)}`;
+}
+
+function dateTimePartsToPayload(dateValue: string, timeValue: string) {
+    return composeDateTime(dateValue, timeValue).replace('T', ' ');
 }
 
 function timeSessionDraftSeconds() {
-    if (!editingTimeSession.value?.started_at || !editingTimeSession.value?.ended_at) return 0;
-    const start = new Date(editingTimeSession.value.started_at).getTime();
-    const end = new Date(editingTimeSession.value.ended_at).getTime();
+    const draft = editingTimeSession.value;
+    if (!draft) return 0;
+    const startedAt = composeDateTime(draft.started_date, draft.started_time);
+    const endedAt = composeDateTime(draft.ended_date, draft.ended_time);
+    if (!startedAt || !endedAt) return 0;
+    const start = new Date(startedAt).getTime();
+    const end = new Date(endedAt).getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
     return Math.round((end - start) / 1000);
 }
 
 function openTimeSessionEdit(session: TimeSession) {
+    const started = tehranDateTimeParts(session.started_at) || { date: date.value, time: '' };
+    const ended = tehranDateTimeParts(session.ended_at) || { date: date.value, time: '' };
     editingTimeSession.value = {
         session,
-        started_at: tehranDateTimeInput(session.started_at),
-        ended_at: tehranDateTimeInput(session.ended_at),
+        started_date: started.date,
+        started_time: started.time,
+        ended_date: ended.date,
+        ended_time: ended.time,
         error: '',
         saving: false,
     };
@@ -1450,9 +1466,11 @@ async function updateTimeSession() {
     const draft = editingTimeSession.value;
     if (!draft) return;
 
-    const start = new Date(draft.started_at).getTime();
-    const end = new Date(draft.ended_at).getTime();
-    if (!draft.started_at || !draft.ended_at || !Number.isFinite(start) || !Number.isFinite(end)) {
+    const startedAt = composeDateTime(draft.started_date, draft.started_time);
+    const endedAt = composeDateTime(draft.ended_date, draft.ended_time);
+    const start = new Date(startedAt).getTime();
+    const end = new Date(endedAt).getTime();
+    if (!startedAt || !endedAt || !Number.isFinite(start) || !Number.isFinite(end)) {
         draft.error = 'شروع و پایان را کامل وارد کنید.';
         return;
     }
@@ -1465,8 +1483,8 @@ async function updateTimeSession() {
     draft.error = '';
     try {
         const { data } = await api.put(`/task-time-sessions/${draft.session.id}`, {
-            started_at: dateTimeInputToPayload(draft.started_at),
-            ended_at: dateTimeInputToPayload(draft.ended_at),
+            started_at: dateTimePartsToPayload(draft.started_date, draft.started_time),
+            ended_at: dateTimePartsToPayload(draft.ended_date, draft.ended_time),
         });
         applyTaskPayload(data);
         editingTimeSession.value = null;
@@ -2910,14 +2928,24 @@ onUnmounted(() => {
                     </div>
                     <button type="button" aria-label="بستن" @click="editingTimeSession = null">×</button>
                 </header>
-                <label>
-                    شروع
-                    <input v-model="editingTimeSession.started_at" type="datetime-local" required />
-                </label>
-                <label>
-                    پایان
-                    <input v-model="editingTimeSession.ended_at" type="datetime-local" required />
-                </label>
+                <div class="time-session-fields">
+                    <label>
+                        روز شروع
+                        <PersianDatePicker v-model="editingTimeSession.started_date" placeholder="انتخاب روز شروع" />
+                    </label>
+                    <label>
+                        ساعت شروع
+                        <span class="time-input modal-time-input"><input v-model="editingTimeSession.started_time" type="time" required /><b>شروع</b></span>
+                    </label>
+                    <label>
+                        روز پایان
+                        <PersianDatePicker v-model="editingTimeSession.ended_date" placeholder="انتخاب روز پایان" />
+                    </label>
+                    <label>
+                        ساعت پایان
+                        <span class="time-input modal-time-input"><input v-model="editingTimeSession.ended_time" type="time" required /><b>پایان</b></span>
+                    </label>
+                </div>
                 <div class="time-session-live-total">
                     <span>زمان واقعی</span>
                     <strong>{{ timeLabel(timeSessionDraftSeconds()) }}</strong>
