@@ -31,6 +31,7 @@ const noteEditorFullscreen = ref(false);
 const codeEditorFullscreen = ref(false);
 const selectedEditorImage = ref<HTMLImageElement | null>(null);
 const resizingImage = ref<{ image: HTMLImageElement; startX: number; startWidth: number; editorWidth: number; corner: 'nw' | 'ne' | 'sw' | 'se' } | null>(null);
+const draggingImageFrame = ref<HTMLElement | null>(null);
 const mobileImagePicker = ref(false);
 const galleryInputRef = ref<HTMLInputElement | null>(null);
 const cameraInputRef = ref<HTMLInputElement | null>(null);
@@ -147,6 +148,7 @@ function renderRichEditor() {
             frame.className = 'editor-image-frame';
             frame.contentEditable = 'false';
             frame.dataset.noteImageFrame = 'true';
+            configureEditorImageFrame(frame);
 
             const image = document.createElement('img');
             image.src = segment.url;
@@ -155,7 +157,7 @@ function renderRichEditor() {
             image.loading = 'lazy';
             image.contentEditable = 'false';
             image.dataset.noteImage = 'true';
-            image.draggable = false;
+            image.draggable = true;
             image.addEventListener('pointerdown', (event) => {
                 event.stopPropagation();
                 selectEditorImage(image);
@@ -198,12 +200,19 @@ function selectEditorImage(image: HTMLImageElement) {
     selectedEditorImage.value = image;
 }
 
+function configureEditorImageFrame(frame: HTMLElement) {
+    frame.draggable = true;
+    frame.addEventListener('dragstart', handleEditorImageDragStart);
+    frame.addEventListener('dragend', handleEditorImageDragEnd);
+}
+
 function addImageResizeHandles(frame: HTMLElement) {
     (['nw', 'ne', 'sw', 'se'] as const).forEach((corner) => {
         const handle = document.createElement('button');
         handle.type = 'button';
         handle.className = `image-corner-handle ${corner}`;
         handle.dataset.resizeCorner = corner;
+        handle.draggable = false;
         handle.setAttribute('aria-label', 'تغییر اندازه عکس');
         handle.addEventListener('pointerdown', (event) => {
             const image = handle.closest('.editor-image-frame')?.querySelector('img');
@@ -370,6 +379,7 @@ function insertRichImage(url: string) {
     frame.className = 'editor-image-frame';
     frame.contentEditable = 'false';
     frame.dataset.noteImageFrame = 'true';
+    configureEditorImageFrame(frame);
 
     const image = document.createElement('img');
     image.src = url;
@@ -378,7 +388,7 @@ function insertRichImage(url: string) {
     image.loading = 'lazy';
     image.contentEditable = 'false';
     image.dataset.noteImage = 'true';
-    image.draggable = false;
+    image.draggable = true;
     image.addEventListener('pointerdown', (event) => {
         event.stopPropagation();
         selectEditorImage(image);
@@ -626,6 +636,61 @@ function handleRichEditorPointerDown(event: PointerEvent) {
 
     selectEditorImage(image);
     startImageResize(event, target.dataset.resizeCorner as 'nw' | 'ne' | 'sw' | 'se');
+}
+
+function handleEditorImageDragStart(event: DragEvent) {
+    const frame = event.currentTarget;
+    if (!(frame instanceof HTMLElement)) return;
+    if ((event.target as HTMLElement | null)?.dataset.resizeCorner) {
+        event.preventDefault();
+        return;
+    }
+
+    draggingImageFrame.value = frame;
+    frame.classList.add('dragging');
+    const image = frame.querySelector('img');
+    if (image) selectEditorImage(image);
+    event.dataTransfer?.setData('text/plain', 'note-image');
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+}
+
+function handleEditorImageDragEnd() {
+    draggingImageFrame.value?.classList.remove('dragging');
+    draggingImageFrame.value = null;
+}
+
+function handleRichEditorDragOver(event: DragEvent) {
+    if (!draggingImageFrame.value) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+}
+
+function handleRichEditorDrop(event: DragEvent) {
+    const frame = draggingImageFrame.value;
+    const editor = richEditorRef.value;
+    if (!frame || !editor) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const targetFrame = target?.closest<HTMLElement>('.editor-image-frame');
+    if (targetFrame && targetFrame !== frame && editor.contains(targetFrame)) {
+        const rect = targetFrame.getBoundingClientRect();
+        targetFrame[event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'](frame);
+        serializeRichEditor();
+        return;
+    }
+
+    const targetParagraph = target?.closest<HTMLElement>('p');
+    if (targetParagraph && editor.contains(targetParagraph)) {
+        const rect = targetParagraph.getBoundingClientRect();
+        targetParagraph[event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'](frame);
+    } else {
+        editor.appendChild(frame);
+    }
+
+    serializeRichEditor();
 }
 
 function deleteSelectedEditorImage() {
@@ -972,6 +1037,8 @@ onBeforeUnmount(() => {
                         @input="handleRichEditorInput"
                         @click="handleRichEditorClick"
                         @pointerdown="handleRichEditorPointerDown"
+                        @dragover="handleRichEditorDragOver"
+                        @drop="handleRichEditorDrop"
                         @keydown="handleRichEditorKeydown"
                         @paste="handleNotePaste"
                     ></div>
@@ -1098,6 +1165,7 @@ onBeforeUnmount(() => {
 .item-modal>footer{margin-top:18px}
 :global(body.note-editor-scroll-lock){overflow:hidden!important;overscroll-behavior:none}
 .word-editor :deep(.editor-image-frame){position:relative;display:block;width:70%;max-width:100%;margin:12px auto;line-height:0}
+.word-editor :deep(.editor-image-frame.dragging){opacity:.55}
 .word-editor :deep(.editor-image-frame img){display:block;width:100%;max-width:100%;max-height:none;height:auto;object-fit:contain;border:2px solid #3a2e1f;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #3a2e1f;cursor:pointer;user-select:none}
 .word-editor :deep(.editor-image-frame.selected img){border-color:#d63384;box-shadow:3px 3px 0 #3a2e1f,0 0 0 5px rgba(214,51,132,.22)}
 .word-editor :deep(.image-corner-handle){position:absolute;z-index:4;display:none;width:18px;height:18px;min-width:18px;padding:0;border:2px solid #3a2e1f;border-radius:5px;background:#ffd93d;box-shadow:1px 1px 0 #3a2e1f;cursor:nwse-resize;touch-action:none;pointer-events:auto}

@@ -93,6 +93,7 @@ Route::prefix('api')->group(function () {
         Route::post('/meals/{meal}/toggle', [PlannerController::class, 'toggleMeal']);
         Route::put('/routine', [PlannerController::class, 'updateRoutine']);
         Route::post('/routine-items', [PlannerController::class, 'storeRoutineItem']);
+        Route::put('/routine-items/{routineItem}', [PlannerController::class, 'updateRoutineItem']);
         Route::post('/routine-items/{routineItem}/toggle', [PlannerController::class, 'toggleRoutineItem']);
         Route::delete('/routine-items/{routineItem}', [PlannerController::class, 'destroyRoutineItem']);
         Route::post('/daily-reviews', [PlannerController::class, 'review']);

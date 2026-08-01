@@ -1878,6 +1878,24 @@ class PlannerController extends Controller
         return $this->routinePayload($request->user()->id, $request->input('routine_date', now($request->user()->timezone)->toDateString()));
     }
 
+    public function updateRoutineItem(Request $request, RoutineItem $routineItem)
+    {
+        abort_unless($routineItem->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
+
+        $routineItem->update([
+            'title' => trim($data['title']),
+            'color' => strtoupper($data['color']),
+            'is_default' => false,
+        ]);
+
+        return $this->routinePayload($request->user()->id, $request->input('routine_date', now($request->user()->timezone)->toDateString()));
+    }
+
     public function destroyRoutineItem(Request $request, RoutineItem $routineItem)
     {
         abort_unless($routineItem->user_id === $request->user()->id, 404);

@@ -81,6 +81,8 @@ const routine = ref<Routine>({ wake_time: null, sleep_time: null, items: [] });
 const routineDraft = ref({ wake_time: '', sleep_time: '' });
 const routineManagerOpen = ref(false);
 const newRoutineTitle = ref('');
+const routineColorOptions = ['#2563EB', '#22D3D0', '#FF8A3D', '#16A34A', '#D63384', '#A855F7'];
+const routineEditModal = ref<{ item: RoutineItem; title: string; color: string } | null>(null);
 const newMeal = ref({ title: '', meal_time: '', meal_type: 'meal', note: '' });
 const newNutritionTask = ref({ title: '', planned_start_time: '', planned_end_time: '', priority: 'medium' });
 const mealDrafts = ref<Record<number, { title: string; meal_time: string; meal_type: string; note: string }>>({});
@@ -1825,6 +1827,29 @@ async function createRoutineItem() {
     newRoutineTitle.value = '';
 }
 
+function openRoutineEditModal(item: RoutineItem) {
+    routineEditModal.value = {
+        item,
+        title: item.title,
+        color: item.color,
+    };
+}
+
+async function updateRoutineItem() {
+    if (!routineEditModal.value) return;
+
+    const title = routineEditModal.value.title.trim();
+    if (!title) return;
+
+    const { data } = await api.put(`/routine-items/${routineEditModal.value.item.id}`, {
+        title,
+        color: routineEditModal.value.color,
+        routine_date: date.value,
+    });
+    routine.value = data;
+    routineEditModal.value = null;
+}
+
 async function deleteRoutineItem(item: RoutineItem) {
     if (!window.confirm('این مورد از روتین حذف شود؟')) return;
 
@@ -2066,7 +2091,10 @@ onUnmounted(() => {
                                 <article v-for="item in routine.items" :key="`routine-manage-${item.id}`" :style="{ '--c': item.color }">
                                     <i></i>
                                     <span>{{ item.title }}</span>
-                                    <small v-if="item.is_default">پیش‌فرض</small>
+                                    <small :class="{ invisible: !item.is_default }">پیش‌فرض</small>
+                                    <button class="routine-edit-btn" type="button" aria-label="ویرایش روتین" title="ویرایش" @click="openRoutineEditModal(item)">
+                                        <svg viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4Z"></path></svg>
+                                    </button>
                                     <button type="button" @click="deleteRoutineItem(item)">حذف</button>
                                 </article>
                             </div>
@@ -3107,6 +3135,35 @@ onUnmounted(() => {
                 <div class="modal-actions refer-actions">
                     <button type="button" @click="closeReferModal">انصراف</button>
                     <button type="submit" :disabled="referSubmitting">{{ referSubmitting ? 'در حال ثبت...' : 'ثبت ارجاع' }}</button>
+                </div>
+            </form>
+        </div>
+
+        <div v-if="routineEditModal" class="modal-backdrop">
+            <form class="modal-card routine-edit-modal" @submit.prevent="updateRoutineItem">
+                <h2>ویرایش روتین</h2>
+                <p v-if="routineEditModal.item.is_default">با ذخیره، این مورد از حالت پیش‌فرض خارج می‌شود.</p>
+                <label>
+                    عنوان
+                    <input v-model="routineEditModal.title" required maxlength="255" />
+                </label>
+                <label>
+                    رنگ
+                    <div class="routine-color-picker">
+                        <button
+                            v-for="color in routineColorOptions"
+                            :key="color"
+                            type="button"
+                            :class="{ active: routineEditModal.color === color }"
+                            :style="{ '--c': color }"
+                            :aria-label="`انتخاب رنگ ${color}`"
+                            @click="routineEditModal.color = color"
+                        ></button>
+                    </div>
+                </label>
+                <div class="modal-actions">
+                    <button type="button" class="ghost" @click="routineEditModal = null">انصراف</button>
+                    <button type="submit">ذخیره</button>
                 </div>
             </form>
         </div>

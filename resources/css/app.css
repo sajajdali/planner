@@ -1,14 +1,21 @@
 @import 'tailwindcss';
-@import '../../node_modules/@fontsource/lalezar/arabic.css';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+
+@font-face {
+    font-family: Lalezar;
+    font-style: normal;
+    font-display: swap;
+    font-weight: 400;
+    src: url('../fonts/lalezar-arabic-400-normal.woff2') format('woff2'), url('../fonts/lalezar-arabic-400-normal.woff') format('woff');
+}
 
 @font-face {
     font-family: Vazirmatn;
     font-style: normal;
     font-display: swap;
     font-weight: 100 900;
-    src: url('../../node_modules/@fontsource-variable/vazirmatn/files/vazirmatn-arabic-wght-normal.woff2') format('woff2-variations');
+    src: url('../fonts/vazirmatn-arabic-wght-normal.woff2') format('woff2-variations');
     unicode-range: U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;
 }
 
@@ -17,7 +24,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 100 900;
-    src: url('../../node_modules/@fontsource-variable/vazirmatn/files/vazirmatn-latin-wght-normal.woff2') format('woff2-variations');
+    src: url('../fonts/vazirmatn-latin-wght-normal.woff2') format('woff2-variations');
     unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
@@ -4989,7 +4996,7 @@ body {
 
 .routine-manage-panel article {
     display: grid;
-    grid-template-columns: 12px minmax(0, 1fr) auto auto;
+    grid-template-columns: 12px minmax(0, 1fr) auto auto auto;
     align-items: center;
     gap: 8px;
     min-height: 34px;
@@ -5020,12 +5027,94 @@ body {
     font-weight: 900;
 }
 
+.routine-manage-panel article small.invisible {
+    visibility: hidden;
+}
+
 .routine-manage-panel article button {
     border: 0;
     background: transparent;
     color: #dc2626;
     font-size: 11px;
     font-weight: 900;
+}
+
+.routine-manage-panel article .routine-edit-btn {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 7px;
+    background: rgba(18, 60, 105, .08);
+    color: rgba(18, 60, 105, .78);
+    box-shadow: none;
+}
+
+.routine-manage-panel article .routine-edit-btn svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.routine-edit-modal {
+    border: 2px solid #3a2e1f;
+    background: #fffbf0;
+    box-shadow: 5px 5px 0 #3a2e1f;
+}
+
+.routine-edit-modal h2 {
+    font-family: Lalezar, Vazirmatn, sans-serif;
+    font-size: 25px;
+    color: #3a2e1f;
+}
+
+.routine-edit-modal p {
+    color: #7a6a4f;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.routine-edit-modal label {
+    display: grid;
+    gap: 7px;
+    color: #7a6a4f;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.routine-edit-modal input {
+    height: 42px;
+    border: 2px solid #3a2e1f;
+    border-radius: 12px;
+    background: #fff;
+    color: #123c69;
+    padding: 0 12px;
+    font-weight: 900;
+}
+
+.routine-color-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.routine-color-picker button {
+    width: 34px;
+    height: 34px;
+    border: 2px solid #3a2e1f;
+    border-radius: 10px;
+    background: var(--c);
+    box-shadow: 2px 2px 0 #3a2e1f;
+}
+
+.routine-color-picker button.active {
+    outline: 4px solid rgba(255, 217, 61, .55);
+    transform: translateY(-1px);
 }
 
 .trello-board-card {
@@ -10246,10 +10335,10 @@ body.trello-scroll-lock {
     }
 
     .routine-manage-panel article {
-        grid-template-columns: 14px minmax(0, 1fr) auto !important;
+        grid-template-columns: 14px minmax(0, 1fr) auto auto !important;
         grid-template-areas:
-            "dot title delete"
-            "dot meta delete";
+            "dot title edit delete"
+            "dot meta edit delete";
         gap: 2px 8px;
         min-height: 50px;
         padding: 8px 10px;
@@ -10293,6 +10382,16 @@ body.trello-scroll-lock {
         background: #fff5f5;
         color: #dc2626;
         font-size: 10px;
+    }
+
+    .routine-manage-panel article .routine-edit-btn {
+        grid-area: edit;
+        width: 22px;
+        min-height: 22px;
+        padding: 0;
+        border: 0;
+        background: rgba(18, 60, 105, .08);
+        color: rgba(18, 60, 105, .78);
     }
 
     .category-card {
