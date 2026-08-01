@@ -409,7 +409,6 @@ watch(selected, loadReport);
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=Lalezar&display=swap');
 .report-shell{min-height:100vh;background:#241b2f;background-image:radial-gradient(circle at 20% 10%,#2e2140 0%,#1a1424 65%);padding:36px 20px 60px;color:#3a2e1f;font-family:Vazirmatn,sans-serif}
 .report-page{width:1020px;max-width:100%;margin:auto;background:#fffbf0;background-image:radial-gradient(#efe3c4 1px,transparent 1px);background-size:18px 18px;border-radius:10px;box-shadow:0 30px 60px rgba(0,0,0,.5);position:relative;padding:34px 34px 44px}
 .tape{position:absolute;top:-15px;width:100px;height:31px;opacity:.85;box-shadow:0 3px 6px rgba(0,0,0,.2)}.tape-yellow{right:70px;background:#ffd93d;transform:rotate(-6deg)}.tape-cyan{left:90px;background:#22d3d0;transform:rotate(5deg)}
