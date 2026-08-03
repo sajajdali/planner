@@ -25,7 +25,7 @@
     font-display: swap;
     font-weight: 100 900;
     src: url('../fonts/vazirmatn-latin-wght-normal.woff2') format('woff2-variations');
-    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+    unicode-range: U+0000-0059,U+005B-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
 :root {
@@ -1317,8 +1317,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     background: transparent;
     box-shadow: none;
     color: #3a2e1f;
-    font-family: Lalezar, Vazirmatn, sans-serif;
+    font-family: Vazirmatn, sans-serif;
     font-size: 21px;
+    font-weight: 800;
     line-height: 33px;
     overflow: hidden;
     resize: none;
@@ -1335,6 +1336,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     gap: 12px;
     padding-top: 4px;
     color: #8a7a5b;
+    font-family: Vazirmatn, sans-serif;
     font-size: 12px;
     font-weight: 900;
 }
