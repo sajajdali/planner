@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 
 export type AlarmSoundKey = 'auto' | 'classic' | 'bell' | 'morning' | 'soft';
-export type AlarmSettings = { title: string; time: string; enabled: boolean; lastRangDate: string | null; sound: AlarmSoundKey };
+export type AlarmSettings = { title: string; time: string; enabled: boolean; lastRangDate: string | null; sound: AlarmSoundKey; armedTime: string | null };
 
 type AlarmSound = {
     key: AlarmSoundKey;
@@ -69,7 +69,7 @@ export const alarmSounds: AlarmSound[] = [
     },
 ];
 
-const alarm = ref<AlarmSettings>({ title: 'یادآوری مهم', time: '', enabled: false, lastRangDate: null, sound: 'morning' });
+const alarm = ref<AlarmSettings>({ title: 'یادآوری مهم', time: '', enabled: false, lastRangDate: null, sound: 'morning', armedTime: null });
 const alarmRinging = ref(false);
 const nowTick = ref(Date.now());
 let loaded = false;
@@ -114,6 +114,7 @@ function loadAlarmSettings() {
             enabled: Boolean(parsed.enabled),
             lastRangDate: typeof parsed.lastRangDate === 'string' ? parsed.lastRangDate : null,
             sound: alarmSounds.some((sound) => sound.key === parsed.sound) ? parsed.sound as AlarmSoundKey : 'morning',
+            armedTime: typeof parsed.armedTime === 'string' ? parsed.armedTime : (parsed.enabled && typeof parsed.time === 'string' ? parsed.time : null),
         };
     } catch {
         window.localStorage.removeItem(storageKey);
@@ -183,6 +184,7 @@ function startAlarmSound() {
 function resetAlarmRingDateForSelectedTime() {
     if (!alarm.value.time) {
         alarm.value.lastRangDate = null;
+        alarm.value.armedTime = null;
         return;
     }
     const today = tehranDateString(new Date(nowTick.value));
@@ -191,6 +193,7 @@ function resetAlarmRingDateForSelectedTime() {
 
 function checkDashboardAlarm() {
     if (!alarm.value.enabled || !alarm.value.time) return;
+    if (alarm.value.armedTime !== alarm.value.time) return;
     const today = tehranDateString(new Date(nowTick.value));
     if (alarm.value.lastRangDate === today) return;
     if (minutesFromTime(alarm.value.time) > currentMinutes()) return;
@@ -232,6 +235,7 @@ function durationCountdown(totalSeconds: number) {
 
 const alarmTarget = computed(() => {
     if (!alarm.value.time) return null;
+    if (alarm.value.armedTime !== alarm.value.time) return null;
     const [hour, minute] = alarm.value.time.split(':').map(Number);
     if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
 

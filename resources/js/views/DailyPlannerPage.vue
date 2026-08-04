@@ -288,13 +288,15 @@ const currentClock = computed(() => {
     const now = new Date(nowTick.value);
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 });
+const alarmIsConfigured = computed(() => Boolean(alarm.value.enabled && alarm.value.time && alarm.value.armedTime === alarm.value.time));
 const alarmRemainingLabel = computed(() => {
     if (!alarm.value.time) return 'ساعت انتخاب نشده';
+    if (alarm.value.armedTime !== alarm.value.time) return 'برای ثبت، تنظیم آلارم را بزن';
     if (!alarm.value.enabled) return 'آلارم خاموش است';
     return fa(durationCountdown(alarmRemainingSeconds.value));
 });
 const alarmCountdownClock = computed(() => {
-    if (!alarm.value.enabled || !alarm.value.time) return '--:--:--';
+    if (!alarmIsConfigured.value) return '--:--:--';
     const total = alarmRemainingSeconds.value;
     const hours = Math.floor(total / 3600);
     const minutes = Math.floor((total % 3600) / 60);
@@ -302,7 +304,7 @@ const alarmCountdownClock = computed(() => {
     return fa(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`);
 });
 const alarmCountdownParts = computed(() => {
-    if (!alarm.value.enabled || !alarm.value.time) return { hours: '--', minutes: '--', seconds: '--' };
+    if (!alarmIsConfigured.value) return { hours: '--', minutes: '--', seconds: '--' };
     const total = alarmRemainingSeconds.value;
     return {
         hours: fa(String(Math.floor(total / 3600)).padStart(2, '0')),
@@ -310,10 +312,10 @@ const alarmCountdownParts = computed(() => {
         seconds: fa(String(total % 60).padStart(2, '0')),
     };
 });
-const alarmIsConfigured = computed(() => Boolean(alarm.value.enabled && alarm.value.time));
 const alarmSettingsDisabled = computed(() => !alarm.value.enabled);
 const alarmStatusLabel = computed(() => {
     if (!alarm.value.time) return 'یک ساعت انتخاب کن';
+    if (alarm.value.armedTime !== alarm.value.time) return 'ساعت انتخاب شده؛ ثبتش کن';
     if (!alarm.value.enabled) return `خاموش؛ ساعت ${fa(alarm.value.time)} آماده است`;
     return `زنگ بعدی ساعت ${fa(alarm.value.time)}`;
 });
@@ -916,6 +918,7 @@ async function setDashboardAlarm() {
         return;
     }
     alarm.value.title = alarm.value.title.trim() || 'یادآوری مهم';
+    alarm.value.armedTime = alarm.value.time;
     resetAlarmRingDateForSelectedTime();
     alarm.value.enabled = true;
     await unlockAlarmAudio();
@@ -2225,7 +2228,6 @@ onUnmounted(() => {
                                         <span><b>{{ alarmCountdownParts.minutes }}</b><em>دقیقه</em></span>
                                         <span><b>{{ alarmCountdownParts.seconds }}</b><em>ثانیه</em></span>
                                     </div>
-                                    <strong>{{ alarmRemainingLabel }}</strong>
                                 </div>
                             </div>
                             <div ref="alarmFormRef" class="alarm-form">
