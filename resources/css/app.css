@@ -2883,21 +2883,70 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     }
 
     .alarm-mini-fab {
-        left: 68px;
-        bottom: 34px;
-        height: 30px;
-        max-width: 92px;
-        grid-template-columns: 17px auto;
-        gap: 4px;
-        padding: 0 7px 0 8px;
-        border-width: 2px;
-        box-shadow: 2px 2px 0 #3a2e1f, inset 0 -2px 0 rgba(255, 217, 61, .55);
-        font-size: 9.5px;
+        left: 64px !important;
+        bottom: 32px !important;
+        width: 34px !important;
+        height: 34px !important;
+        max-width: 34px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        grid-template-columns: none !important;
+        gap: 0 !important;
+        padding: 0 !important;
+        border-width: 2px !important;
+        border-radius: 999px !important;
+        background: #fffaf0 !important;
+        box-shadow: 2px 2px 0 #3a2e1f !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        transform: none !important;
+    }
+
+    .alarm-mini-fab::before {
+        display: none !important;
+        content: none !important;
     }
 
     .alarm-mini-fab svg {
-        width: 16px;
-        height: 16px;
+        width: 18px !important;
+        height: 18px !important;
+        display: block !important;
+        flex: 0 0 18px !important;
+        margin: 0 !important;
+        transform: translateX(-.5px) !important;
+        stroke-width: 2 !important;
+        animation: alarmMiniTick 1.15s ease-in-out infinite;
+    }
+
+    .alarm-mini-fab span {
+        display: none !important;
+    }
+
+    body:has(.notebook-shell.has-active-timer) .alarm-mini-fab {
+        bottom: 76px !important;
+    }
+
+    .alarm-mini-fab:hover {
+        transform: none !important;
+    }
+}
+
+@keyframes alarmMiniTick {
+    0%, 100% {
+        opacity: 1;
+        transform: translateX(-.5px) rotate(0deg) scale(1);
+    }
+    18% {
+        transform: translateX(-.5px) rotate(-8deg) scale(1.04);
+    }
+    36% {
+        opacity: .72;
+        transform: translateX(-.5px) rotate(8deg) scale(1.04);
+    }
+    54% {
+        opacity: 1;
+        transform: translateX(-.5px) rotate(0deg) scale(1);
     }
 }
 
@@ -8521,7 +8570,8 @@ body.trello-scroll-lock {
     .due-alert-board,
     .due-alert-head > span,
     .due-alert-list button,
-    .alarm-ring-modal {
+    .alarm-ring-modal,
+    .alarm-mini-fab svg {
         animation: none;
     }
 }
