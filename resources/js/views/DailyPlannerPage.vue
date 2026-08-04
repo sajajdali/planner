@@ -5,6 +5,7 @@ import { isValidJalaaliDate, jalaaliMonthLength, toGregorian, toJalaali } from '
 import api from '../api';
 import AppMenu from '../components/AppMenu.vue';
 import PersianDatePicker from '../components/PersianDatePicker.vue';
+import { useDashboardAlarm } from '../composables/useDashboardAlarm';
 
 type Category = { id: number; name: string; color: string; soft_color: string; icon: string };
 type TaskGroup = { id: number; category_id: number; name: string; color: string; soft_color: string; is_active?: boolean };
@@ -146,6 +147,9 @@ const tableFilterOpen = ref(false);
 const tableCategoryFilter = ref('');
 const tableGroupFilter = ref('');
 const seenDueIds = ref<Set<string>>(new Set());
+const { alarm, alarmRemainingSeconds, durationCountdown, resetAlarmRingDateForSelectedTime, saveAlarmSettings, unlockAlarmAudio, playAlarmChime, alarmSounds } = useDashboardAlarm();
+const alarmNotice = ref('');
+let alarmNoticeTimer: number | undefined;
 
 const fallbackPriorities: PrioritySetting[] = [
     { id: 1, key: 'low', label: 'کم', color: '#6B7280', soft_color: '#F0F2F6' },
@@ -155,7 +159,7 @@ const fallbackPriorities: PrioritySetting[] = [
 ];
 const mealTypeLabels: Record<string, string> = { breakfast: 'صبحانه', lunch: 'ناهار', dinner: 'شام', snack: 'میان‌وعده', water: 'آب', meal: 'وعده' };
 const mealTypeIcon: Record<string, string> = { breakfast: '☀', lunch: '◐', dinner: '☾', snack: '◆', water: '≈', meal: '●' };
-const iconMap: Record<string, string> = { briefcase: 'M10 6h4M5 9h14v10H5zM8 9V7a2 2 0 012-2h4a2 2 0 012 2v2', activity: 'M22 12h-4l-3 8-6-16-3 8H2', leaf: 'M5 21c8 0 14-6 14-14V4h-3C8 4 4 8 4 16c0 2 1 4 1 5z', book: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5z', home: 'M3 11l9-8 9 8v10H3z', target: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 18a6 6 0 100-12 6 6 0 000 12zM12 14a2 2 0 100-4 2 2 0 000 4z', calendar: 'M7 3v4M17 3v4M4 9h16M5 5h14v16H5z', clock: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2', star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.9 6.4 21.2 7.5 15 3 10.6l6.2-.9z', heart: 'M20.8 5.6a5.5 5.5 0 00-7.8 0L12 6.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 22l7.8-7.6 1-1a5.5 5.5 0 000-7.8z', wallet: 'M3 7h15a3 3 0 013 3v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM16 12h3', cart: 'M4 6h2l2 11h11l2-8H7M9 21a1 1 0 100-2 1 1 0 000 2zM18 21a1 1 0 100-2 1 1 0 000 2z', code: 'M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14', pen: 'M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16zM13 7l4 4', phone: 'M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7l.5 2.6a2 2 0 01-.6 1.9L7.8 9.4a16 16 0 006.8 6.8l1.2-1.2a2 2 0 011.9-.6l2.6.5a2 2 0 011.7 2z', users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8', music: 'M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z', camera: 'M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z', plane: 'M22 2L11 13M22 2l-7 20-4-9-9-4z', gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 110-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 100-5C13 2 12 7 12 7z', shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', coffee: 'M17 8h1a4 4 0 010 8h-1M3 8h14v5a6 6 0 01-6 6H9a6 6 0 01-6-6zM6 2v3M10 2v3M14 2v3', sparkles: 'M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8zM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8z', map: 'M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3zM9 3v15M15 6v15', folder: 'M3 5h7l2 3h9v11H3z', zap: 'M13 2L3 14h8l-1 8 10-12h-8z', sun: 'M12 18a6 6 0 100-12 6 6 0 000 12zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', moon: 'M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z', check: 'M20 6L9 17l-5-5', flag: 'M4 22V4h12l-1 4 1 4H4' };
+const iconMap: Record<string, string> = { briefcase: 'M10 6h4M5 9h14v10H5zM8 9V7a2 2 0 012-2h4a2 2 0 012 2v2', activity: 'M22 12h-4l-3 8-6-16-3 8H2', leaf: 'M5 21c8 0 14-6 14-14V4h-3C8 4 4 8 4 16c0 2 1 4 1 5z', book: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5z', home: 'M3 11l9-8 9 8v10H3z', target: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 18a6 6 0 100-12 6 6 0 000 12zM12 14a2 2 0 100-4 2 2 0 000 4z', calendar: 'M7 3v4M17 3v4M4 9h16M5 5h14v16H5z', clock: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2', bell: 'M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M13.7 21a2 2 0 01-3.4 0', star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.9 6.4 21.2 7.5 15 3 10.6l6.2-.9z', heart: 'M20.8 5.6a5.5 5.5 0 00-7.8 0L12 6.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 22l7.8-7.6 1-1a5.5 5.5 0 000-7.8z', wallet: 'M3 7h15a3 3 0 013 3v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7zM16 12h3', cart: 'M4 6h2l2 11h11l2-8H7M9 21a1 1 0 100-2 1 1 0 000 2zM18 21a1 1 0 100-2 1 1 0 000 2z', code: 'M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14', pen: 'M4 20h4L19 9a2.8 2.8 0 00-4-4L4 16zM13 7l4 4', phone: 'M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7l.5 2.6a2 2 0 01-.6 1.9L7.8 9.4a16 16 0 006.8 6.8l1.2-1.2a2 2 0 011.9-.6l2.6.5a2 2 0 011.7 2z', users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8', music: 'M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z', camera: 'M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z', plane: 'M22 2L11 13M22 2l-7 20-4-9-9-4z', gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 110-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 100-5C13 2 12 7 12 7z', shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', coffee: 'M17 8h1a4 4 0 010 8h-1M3 8h14v5a6 6 0 01-6 6H9a6 6 0 01-6-6zM6 2v3M10 2v3M14 2v3', sparkles: 'M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8zM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8z', map: 'M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3zM9 3v15M15 6v15', folder: 'M3 5h7l2 3h9v11H3z', zap: 'M13 2L3 14h8l-1 8 10-12h-8z', sun: 'M12 18a6 6 0 100-12 6 6 0 000 12zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', moon: 'M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z', check: 'M20 6L9 17l-5-5', flag: 'M4 22V4h12l-1 4 1 4H4' };
 const viewOptions = [
     { value: 'notebook', label: 'دفترچه‌ای', icon: 'book', hint: 'نمای رنگی روزانه' },
     { value: 'trello', label: 'ترلو', icon: 'folder', hint: 'کارت‌ها کنار هم' },
@@ -283,6 +287,17 @@ const currentClock = computed(() => {
     const now = new Date(nowTick.value);
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 });
+const alarmRemainingLabel = computed(() => {
+    if (!alarm.value.time) return 'ساعت انتخاب نشده';
+    if (!alarm.value.enabled) return 'آلارم خاموش است';
+    return fa(durationCountdown(alarmRemainingSeconds.value));
+});
+const alarmStatusLabel = computed(() => {
+    if (!alarm.value.time) return 'یک ساعت انتخاب کن';
+    if (!alarm.value.enabled) return `خاموش؛ ساعت ${fa(alarm.value.time)} آماده است`;
+    return `زنگ بعدی ساعت ${fa(alarm.value.time)}`;
+});
+const alarmModeLabel = computed(() => alarm.value.enabled ? 'خاموش کردن' : 'فعال کردن آلارم');
 const isViewingToday = computed(() => date.value === tehranDateString(new Date(nowTick.value)));
 const dayPlanTitle = computed(() => isViewingToday.value ? 'برنامه امروز' : 'برنامه روز');
 const dueNotifications = computed<DueNotification[]>(() => {
@@ -852,6 +867,41 @@ function isTaskTimerActive(task: Task) {
 function minutesFromTime(time: string) {
     const [hour, minute] = time.split(':').map(Number);
     return hour * 60 + minute;
+}
+
+function showAlarmNotice(message: string) {
+    alarmNotice.value = message;
+    if (alarmNoticeTimer) window.clearTimeout(alarmNoticeTimer);
+    alarmNoticeTimer = window.setTimeout(() => {
+        alarmNotice.value = '';
+    }, 2800);
+}
+
+async function setDashboardAlarm() {
+    if (!alarm.value.time) {
+        showAlarmNotice('اول ساعت آلارم را انتخاب کن.');
+        return;
+    }
+    alarm.value.title = alarm.value.title.trim() || 'یادآوری مهم';
+    resetAlarmRingDateForSelectedTime();
+    alarm.value.enabled = true;
+    await unlockAlarmAudio();
+    saveAlarmSettings();
+    showAlarmNotice(`آلارم برای ساعت ${fa(alarm.value.time)} تنظیم شد.`);
+}
+
+function toggleDashboardAlarm() {
+    alarm.value.enabled = !alarm.value.enabled;
+    if (alarm.value.enabled) resetAlarmRingDateForSelectedTime();
+    if (!alarm.value.enabled) stopAlarmSound();
+    saveAlarmSettings();
+    showAlarmNotice(alarm.value.enabled ? 'تنظیمات آلارم فعال شد.' : 'آلارم خاموش شد.');
+}
+
+async function testDashboardAlarm() {
+    await unlockAlarmAudio();
+    playAlarmChime();
+    showAlarmNotice('صدای آلارم تست شد.');
 }
 
 function categoryTasks(categoryId: number) {
@@ -1900,6 +1950,8 @@ watch(dueNotifications, (items) => {
     items.forEach((item) => seenDueIds.value.add(item.id));
 });
 
+watch(alarm, saveAlarmSettings, { deep: true });
+
 watch(dailyNote, async () => {
     await nextTick();
     resizeDailyNote();
@@ -1931,12 +1983,14 @@ onUnmounted(() => {
     document.body.classList.remove('trello-scroll-lock');
     if (timerInterval) window.clearInterval(timerInterval);
     if (financeNoticeTimer) window.clearTimeout(financeNoticeTimer);
+    if (alarmNoticeTimer) window.clearTimeout(alarmNoticeTimer);
 });
 </script>
 
 <template>
     <div class="notebook-shell" :class="{ 'has-active-timer': activeTimerDockVisible }" dir="rtl">
         <div v-if="financeNotice" class="finance-toast" role="status">{{ financeNotice }}</div>
+        <div v-if="alarmNotice" class="alarm-toast" role="status">{{ alarmNotice }}</div>
         <div class="notebook-page">
             <i class="tape tape-yellow"></i>
             <i class="tape tape-cyan"></i>
@@ -2097,6 +2151,60 @@ onUnmounted(() => {
                                     </button>
                                     <button type="button" @click="deleteRoutineItem(item)">حذف</button>
                                 </article>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="alarm-card" :class="{ active: alarm.enabled }">
+                        <div class="alarm-main" :class="{ inactive: !alarm.enabled }">
+                            <header class="alarm-head">
+                                <div>
+                                    <i><svg viewBox="0 0 24 24"><path :d="iconMap.clock" /></svg></i>
+                                    <strong>آلارم</strong>
+                                    <span>{{ alarmStatusLabel }}</span>
+                                </div>
+                                <button class="alarm-toggle" type="button" :class="{ active: alarm.enabled }" @click="toggleDashboardAlarm">
+                                    {{ alarmModeLabel }}
+                                </button>
+                            </header>
+                            <div class="alarm-display">
+                                <div class="alarm-time-tile">
+                                    <span>ساعت زنگ</span>
+                                    <b>{{ alarm.time ? fa(alarm.time) : '--:--' }}</b>
+                                </div>
+                                <div class="alarm-countdown-tile">
+                                    <span>مانده تا زنگ</span>
+                                    <strong>{{ alarmRemainingLabel }}</strong>
+                                </div>
+                            </div>
+                            <div class="alarm-form">
+                                <label>
+                                    <span>عنوان</span>
+                                    <input v-model="alarm.title" placeholder="مثلا تماس با مشتری" />
+                                </label>
+                                <label>
+                                    <span>ساعت زنگ</span>
+                                    <input v-model="alarm.time" type="time" />
+                                </label>
+                                <div class="alarm-sound-picker">
+                                    <span>صدای زنگ</span>
+                                    <div>
+                                        <button
+                                            v-for="sound in alarmSounds"
+                                            :key="sound.key"
+                                            type="button"
+                                            :class="{ active: alarm.sound === sound.key }"
+                                            :title="sound.label"
+                                            :aria-label="`انتخاب ${sound.label}`"
+                                            @click="alarm.sound = sound.key"
+                                        >
+                                            <svg viewBox="0 0 24 24"><path :d="iconMap[sound.icon]" /></svg>
+                                            <small>{{ sound.label }}</small>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" @click="setDashboardAlarm">تنظیم آلارم</button>
+                                <button type="button" class="ghost" @click="testDashboardAlarm">تست صدا</button>
                             </div>
                         </div>
                     </section>

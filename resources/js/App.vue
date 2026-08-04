@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useDashboardAlarm } from './composables/useDashboardAlarm';
 import { useAuthStore } from './stores/auth';
 
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const publicRoutes = ['/', '/login', '/register'];
+const { alarm, alarmRinging, startGlobalAlarmWatcher, stopGlobalAlarmWatcher, stopAlarmSound } = useDashboardAlarm();
+const clockIconPath = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2';
+
+function fa(input: string | number) {
+    return String(input).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
+}
 
 function isPublicRoute(path: string) {
     return publicRoutes.includes(path) || path.startsWith('/s/') || path.startsWith('/shared-notes/');
@@ -53,6 +60,7 @@ function normalizeInputDigits(event: Event) {
 }
 
 onMounted(async () => {
+    startGlobalAlarmWatcher();
     document.addEventListener('beforeinput', normalizeTypedDigits, true);
     document.addEventListener('input', normalizeInputDigits, true);
     await auth.fetchUser();
@@ -64,6 +72,7 @@ onMounted(async () => {
 onUnmounted(() => {
     document.removeEventListener('beforeinput', normalizeTypedDigits, true);
     document.removeEventListener('input', normalizeInputDigits, true);
+    stopGlobalAlarmWatcher();
 });
 
 watch(
@@ -85,4 +94,14 @@ watch(
         <span>در حال آماده‌سازی برنامه...</span>
     </div>
     <RouterView v-else />
+    <div v-if="alarmRinging" class="modal-backdrop alarm-backdrop" dir="rtl">
+        <div class="modal-card alarm-ring-modal" role="alertdialog" aria-modal="true">
+            <div class="alarm-ring-icon">
+                <svg viewBox="0 0 24 24"><path :d="clockIconPath" /></svg>
+            </div>
+            <h2>{{ alarm.title || 'وقتشه!' }}</h2>
+            <p>آلارم ساعت {{ fa(alarm.time) }} رسید.</p>
+            <button type="button" @click="stopAlarmSound()">توقف زنگ</button>
+        </div>
+    </div>
 </template>

@@ -7662,6 +7662,423 @@ body.trello-scroll-lock {
     animation: overdueBoardBlink 1.05s ease-in-out infinite;
 }
 
+.alarm-toast {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 8000;
+    max-width: min(360px, calc(100vw - 36px));
+    padding: 11px 15px;
+    border: 2px solid #3a2e1f;
+    border-radius: 14px;
+    background: #e8fff8;
+    color: #3a2e1f;
+    box-shadow: 3px 3px 0 #3a2e1f;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.alarm-card {
+    position: relative;
+    display: block;
+    margin-bottom: 18px;
+    padding: 18px 18px 16px;
+    border: 2px solid #3a2e1f;
+    border-radius: 14px;
+    background:
+        linear-gradient(90deg, rgba(214, 51, 132, .12) 0 2px, transparent 2px 100%) 62px 0 / 100% 100% no-repeat,
+        repeating-linear-gradient(0deg, rgba(34, 211, 208, .14) 0 1px, transparent 1px 32px),
+        radial-gradient(circle at 18px 18px, rgba(255, 217, 61, .32) 0 3px, transparent 4px),
+        linear-gradient(135deg, #fffdf7 0%, #fff8e8 48%, #f1fcff 100%);
+    background-size: auto, auto, 34px 34px, auto;
+    box-shadow: 3px 3px 0 #3a2e1f;
+    overflow: hidden;
+    transform: rotate(.15deg);
+}
+
+.alarm-card.active {
+    background:
+        linear-gradient(90deg, rgba(214, 51, 132, .12) 0 2px, transparent 2px 100%) 62px 0 / 100% 100% no-repeat,
+        repeating-linear-gradient(0deg, rgba(34, 211, 208, .16) 0 1px, transparent 1px 32px),
+        radial-gradient(circle at 18px 18px, rgba(255, 217, 61, .34) 0 3px, transparent 4px),
+        linear-gradient(135deg, #fffffb 0%, #fff7d6 48%, #eefcff 100%);
+    background-size: auto, auto, 34px 34px, auto;
+}
+
+.alarm-card::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    right: 26px;
+    width: 86px;
+    height: 24px;
+    border-radius: 3px;
+    background: rgba(255, 111, 165, .72);
+    box-shadow: 2px 2px 0 rgba(58, 46, 31, .28);
+    transform: rotate(-4deg);
+}
+
+.alarm-card::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 22px;
+    top: 20px;
+    bottom: 20px;
+    width: 8px;
+    border-radius: 999px;
+    background: repeating-linear-gradient(180deg, #ffd93d 0 8px, transparent 8px 17px);
+    opacity: .75;
+}
+
+.alarm-card .alarm-main::before {
+    content: '';
+    position: absolute;
+    left: -18px;
+    top: 50%;
+    width: 190px;
+    height: 190px;
+    border: 10px solid rgba(58, 46, 31, .08);
+    border-radius: 50%;
+    background:
+        linear-gradient(rgba(58, 46, 31, .16), rgba(58, 46, 31, .16)) 50% 50% / 8px 62px no-repeat,
+        linear-gradient(45deg, transparent 0 48%, rgba(214, 51, 132, .15) 48% 53%, transparent 53%) 50% 50% / 86px 86px no-repeat,
+        radial-gradient(circle, rgba(255, 217, 61, .24) 0 7px, transparent 8px),
+        rgba(255, 255, 255, .18);
+    box-shadow:
+        inset 0 0 0 3px rgba(255, 255, 255, .38),
+        0 0 0 18px rgba(34, 211, 208, .045);
+    transform: translateY(-50%) rotate(-10deg);
+    pointer-events: none;
+}
+
+.alarm-card .alarm-main::after {
+    content: '';
+    position: absolute;
+    left: 48px;
+    top: calc(50% - 58px);
+    width: 72px;
+    height: 72px;
+    border-top: 7px solid rgba(58, 46, 31, .12);
+    border-right: 7px solid rgba(58, 46, 31, .12);
+    border-radius: 0 999px 0 0;
+    transform: rotate(26deg);
+    pointer-events: none;
+}
+
+.alarm-main {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
+.alarm-main.inactive .alarm-display,
+.alarm-main.inactive .alarm-form {
+    opacity: .48;
+    filter: grayscale(.18);
+}
+
+.alarm-head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 2px 0;
+}
+
+.alarm-head > div {
+    display: grid;
+    grid-template-columns: 48px minmax(0, auto);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 4px 11px;
+    min-width: 0;
+}
+
+.alarm-head i {
+    grid-row: 1 / 3;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 2px solid #3a2e1f;
+    border-radius: 13px;
+    background: #fff7d6;
+    box-shadow: 2px 2px 0 #3a2e1f, inset 0 -3px 0 rgba(255, 217, 61, .65);
+    transform: rotate(-3deg);
+}
+
+.alarm-head i svg {
+    width: 23px;
+    height: 23px;
+    fill: none;
+    stroke: #3a2e1f;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.alarm-head strong {
+    color: #d63384;
+    font-family: Lalezar, Vazirmatn, sans-serif;
+    font-size: 25px;
+    line-height: 1;
+    text-shadow: 1px 1px 0 #fff;
+}
+
+.alarm-head span {
+    color: #6d5c43;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.alarm-toggle {
+    min-width: 132px;
+    height: 38px;
+    border: 2px solid #3a2e1f;
+    border-radius: 999px;
+    background: #fff;
+    color: #7a6a4f;
+    box-shadow: 2px 2px 0 #3a2e1f;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.alarm-toggle.active {
+    background: #fff;
+    color: #3a2e1f;
+}
+
+.alarm-toggle:not(.active) {
+    background: #16a34a;
+    color: #fff;
+}
+
+.alarm-display {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(138px, .72fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    min-height: 74px;
+}
+
+.alarm-time-tile,
+.alarm-countdown-tile {
+    display: grid;
+    align-content: center;
+    gap: 7px;
+    min-width: 0;
+    height: 100%;
+    padding: 11px 13px;
+    border: 2px solid #3a2e1f;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .76);
+    box-shadow: 2px 2px 0 rgba(58, 46, 31, .55);
+}
+
+.alarm-time-tile {
+    background: #fffaf0;
+    transform: rotate(-.25deg);
+}
+
+.alarm-countdown-tile {
+    background: #e8fff8;
+    border-style: dashed;
+    transform: rotate(.18deg);
+}
+
+.alarm-display span {
+    color: #7a6a4f;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.alarm-display b {
+    direction: ltr;
+    color: #3a2e1f;
+    font-family: Lalezar, Vazirmatn, sans-serif;
+    font-size: 35px;
+    line-height: .9;
+}
+
+.alarm-display strong {
+    color: #0f766e;
+    font-size: 16px;
+    font-weight: 900;
+    text-align: right;
+    line-height: 1.55;
+}
+
+.alarm-form {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 120px minmax(190px, 1fr) 116px 96px;
+    gap: 10px;
+    align-items: end;
+    padding: 10px;
+    border: 2px solid rgba(58, 46, 31, .2);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .5);
+}
+
+.alarm-form label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: #5f4d34;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.alarm-sound-picker {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: #5f4d34;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.alarm-sound-picker > div {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(34px, 1fr));
+    gap: 6px;
+    min-width: 0;
+}
+
+.alarm-sound-picker button {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    height: 40px;
+    border: 2px solid #3a2e1f;
+    border-radius: 12px;
+    background: #fff;
+    color: #3a2e1f;
+    box-shadow: 2px 2px 0 rgba(58, 46, 31, .45);
+    padding: 0;
+}
+
+.alarm-sound-picker button.active {
+    background: #ffd93d;
+    box-shadow: 2px 2px 0 #d63384;
+}
+
+.alarm-sound-picker svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.alarm-sound-picker small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.alarm-form input,
+.alarm-form select {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    border: 2px solid #3a2e1f;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 2px 2px 0 rgba(58, 46, 31, .55);
+    color: #3a2e1f;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.alarm-form select {
+    padding-left: 28px;
+}
+
+.alarm-form > button,
+.alarm-ring-modal button {
+    height: 40px;
+    border: 2px solid #3a2e1f;
+    border-radius: 12px;
+    background: #3a2e1f;
+    color: #fff;
+    box-shadow: 2px 2px 0 #d63384;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.alarm-form > button.ghost {
+    background: #fff;
+    color: #3a2e1f;
+    box-shadow: 2px 2px 0 #22d3d0;
+}
+
+.alarm-backdrop {
+    background: rgba(58, 46, 31, .58);
+}
+
+.alarm-ring-modal {
+    justify-items: center;
+    text-align: center;
+    border: 3px solid #3a2e1f;
+    background:
+        radial-gradient(circle at 18px 18px, rgba(255, 217, 61, .45) 0 5px, transparent 6px),
+        linear-gradient(135deg, #fffaf0, #ffe4f0);
+    background-size: 34px 34px, auto;
+    box-shadow: 8px 8px 0 #3a2e1f;
+    animation: alarmModalRing .72s ease-in-out infinite;
+}
+
+.alarm-ring-icon {
+    display: grid;
+    place-items: center;
+    width: 78px;
+    height: 78px;
+    border: 3px solid #3a2e1f;
+    border-radius: 50%;
+    background: #ffd93d;
+    box-shadow: 4px 4px 0 #ff6fa5;
+}
+
+.alarm-ring-icon svg {
+    width: 42px;
+    height: 42px;
+    fill: none;
+    stroke: #3a2e1f;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.alarm-ring-modal h2 {
+    color: #d63384;
+    font-size: 28px;
+}
+
+.alarm-ring-modal p {
+    margin: 0;
+    color: #3a2e1f;
+    font-weight: 900;
+}
+
+@keyframes alarmModalRing {
+    0%, 100% { transform: rotate(-.6deg) scale(1); }
+    50% { transform: rotate(.6deg) scale(1.015); }
+}
+
 .due-alert-head {
     display: flex;
     align-items: center;
@@ -7817,8 +8234,134 @@ body.trello-scroll-lock {
 @media (prefers-reduced-motion: reduce) {
     .due-alert-board,
     .due-alert-head > span,
-    .due-alert-list button {
+    .due-alert-list button,
+    .alarm-ring-modal {
         animation: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .alarm-card {
+        padding: 12px;
+        border-radius: 16px;
+    }
+
+    .alarm-display {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+        gap: 8px;
+    }
+
+    .alarm-card .alarm-main::before {
+        left: -58px;
+        top: 64%;
+        width: 122px;
+        height: 122px;
+        border-width: 7px;
+        opacity: .62;
+    }
+
+    .alarm-card .alarm-main::after {
+        left: -10px;
+        top: calc(64% - 42px);
+        width: 54px;
+        height: 54px;
+        border-width: 5px;
+        opacity: .65;
+    }
+
+    .alarm-main.inactive {
+        gap: 0;
+    }
+
+    .alarm-main.inactive .alarm-display,
+    .alarm-main.inactive .alarm-form {
+        display: none;
+    }
+
+    .alarm-form {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        padding: 9px;
+    }
+
+    .alarm-form label:first-child,
+    .alarm-sound-picker {
+        grid-column: 1 / -1;
+    }
+
+    .alarm-form > button {
+        min-width: 0;
+    }
+
+    .alarm-time-tile,
+    .alarm-countdown-tile {
+        padding: 9px 11px;
+        border-radius: 12px;
+    }
+
+    .alarm-display b {
+        font-size: 30px;
+    }
+
+    .alarm-display strong {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 460px) {
+    .alarm-head,
+    .alarm-display {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .alarm-head {
+        gap: 8px;
+    }
+
+    .alarm-head > div {
+        grid-template-columns: 38px minmax(0, 1fr);
+    }
+
+    .alarm-head i {
+        width: 38px;
+        height: 38px;
+    }
+
+    .alarm-head strong {
+        font-size: 21px;
+    }
+
+    .alarm-head span {
+        font-size: 11px;
+    }
+
+    .alarm-toggle {
+        width: 100%;
+        min-width: 0;
+        height: 36px;
+        font-size: 12px;
+    }
+
+    .alarm-display strong {
+        text-align: right;
+    }
+
+    .alarm-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .alarm-sound-picker > div {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .alarm-form label:first-child {
+        grid-column: auto;
+    }
+
+    .alarm-form > button {
+        width: 100%;
     }
 }
 
