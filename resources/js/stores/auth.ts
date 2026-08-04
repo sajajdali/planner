@@ -64,6 +64,15 @@ export const useAuthStore = defineStore('auth', {
                 this.loading = false;
             }
         },
+        async verifyPhoneCode(phone: string, code: string) {
+            this.loading = true;
+            try {
+                const { data } = await api.post('/phone-code/verify', { phone, code, mode: 'register' });
+                return data as { verified: boolean };
+            } finally {
+                this.loading = false;
+            }
+        },
         async phoneRegister(payload: { phone: string; code: string; name: string; city?: string; education?: string; job?: string }) {
             this.loading = true;
             try {

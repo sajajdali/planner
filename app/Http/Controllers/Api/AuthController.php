@@ -125,6 +125,26 @@ class AuthController extends Controller
         return ['user' => $this->userPayload($user)];
     }
 
+    public function verifyPhoneCode(Request $request)
+    {
+        $data = $request->validate([
+            'phone' => ['required', 'regex:/^09\d{9}$/'],
+            'code' => ['required', 'digits:4'],
+            'mode' => ['required', 'in:register'],
+        ]);
+
+        if (User::query()->where('phone', $data['phone'])->exists()) {
+            throw ValidationException::withMessages([
+                'phone' => ['این شماره قبلاً ثبت شده است.'],
+            ]);
+        }
+
+        $this->ensureValidPhoneCode($data['phone'], $data['code']);
+        Cache::put($this->phoneVerifiedCacheKey($data['phone']), true, now()->addMinutes(15));
+
+        return ['verified' => true];
+    }
+
     public function phoneRegister(Request $request)
     {
         $data = $request->validate([
@@ -136,7 +156,9 @@ class AuthController extends Controller
             'job' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $this->ensureValidPhoneCode($data['phone'], $data['code']);
+        if (! Cache::get($this->phoneVerifiedCacheKey($data['phone']))) {
+            $this->ensureValidPhoneCode($data['phone'], $data['code']);
+        }
 
         $user = User::create([
             'name' => $data['name'],
@@ -154,6 +176,7 @@ class AuthController extends Controller
 
         Auth::login($user, true);
         Cache::forget($this->phoneCodeCacheKey($data['phone']));
+        Cache::forget($this->phoneVerifiedCacheKey($data['phone']));
         $request->session()->regenerate();
 
         return ['user' => $this->userPayload($user)];
@@ -175,6 +198,11 @@ class AuthController extends Controller
     private function phoneCodeCacheKey(string $phone): string
     {
         return 'phone-auth-code:'.$phone;
+    }
+
+    private function phoneVerifiedCacheKey(string $phone): string
+    {
+        return 'phone-auth-verified:'.$phone;
     }
 
     public function user(Request $request)

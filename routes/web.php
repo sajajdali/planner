@@ -12,6 +12,7 @@ Route::prefix('api')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->name('login');
     Route::post('/register', [AuthController::class, 'register'])->middleware('guest');
     Route::post('/phone-code', [AuthController::class, 'sendPhoneCode'])->middleware('guest');
+    Route::post('/phone-code/verify', [AuthController::class, 'verifyPhoneCode'])->middleware('guest');
     Route::post('/phone-login', [AuthController::class, 'phoneLogin'])->middleware('guest');
     Route::post('/phone-register', [AuthController::class, 'phoneRegister'])->middleware('guest');
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth');

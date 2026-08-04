@@ -7773,10 +7773,26 @@ body.trello-scroll-lock {
     min-width: 0;
 }
 
-.alarm-main.inactive .alarm-display,
-.alarm-main.inactive .alarm-form {
-    opacity: .48;
-    filter: grayscale(.18);
+.alarm-main.inactive .alarm-display {
+    opacity: .32;
+    filter: grayscale(.65);
+    box-shadow: inset 0 0 0 2px rgba(58, 46, 31, .12);
+}
+
+.alarm-main.inactive .alarm-display::after {
+    content: 'غیرفعال';
+    position: absolute;
+    inset: 12px;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    border: 2px dashed rgba(58, 46, 31, .34);
+    border-radius: 15px;
+    background: rgba(255, 251, 240, .7);
+    color: rgba(58, 46, 31, .72);
+    font-family: Lalezar, Vazirmatn, sans-serif;
+    font-size: 26px;
+    pointer-events: none;
 }
 
 .alarm-head {
@@ -7861,54 +7877,222 @@ body.trello-scroll-lock {
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: minmax(138px, .72fr) minmax(0, 1fr);
+    grid-template-columns: 112px minmax(0, 1fr);
     align-items: center;
     gap: 12px;
-    min-height: 74px;
+    min-height: 118px;
+    padding: 10px;
+    border: 2px solid rgba(58, 46, 31, .22);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 18px 18px, rgba(255, 217, 61, .25) 0 4px, transparent 5px),
+        rgba(255, 255, 255, .44);
+    background-size: 28px 28px, auto;
+    cursor: default;
+    user-select: none;
 }
 
-.alarm-time-tile,
-.alarm-countdown-tile {
+.alarm-clock-face {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    justify-self: center;
+    border: 2px solid #3a2e1f;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle, #3a2e1f 0 4px, transparent 5px),
+        radial-gradient(circle, #fffaf0 0 58%, #ffd93d 59% 66%, #fffaf0 67%);
+    box-shadow: 3px 3px 0 #3a2e1f, inset 0 0 0 5px rgba(255, 255, 255, .55);
+    transform: rotate(-3deg);
+}
+
+.alarm-clock-face span {
+    position: absolute;
+    top: 7px;
+    left: calc(50% - 2px);
+    width: 4px;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(58, 46, 31, .42);
+    transform: rotate(var(--mark-angle)) translateY(38px);
+    transform-origin: 2px 41px;
+}
+
+.alarm-clock-face span:nth-child(3n) {
+    height: 13px;
+    background: #3a2e1f;
+}
+
+.alarm-hour-hand,
+.alarm-minute-hand {
+    position: absolute;
+    left: calc(50% - 3px);
+    bottom: 50%;
+    width: 6px;
+    border-radius: 999px;
+    background: #3a2e1f;
+    transform-origin: center bottom;
+}
+
+.alarm-hour-hand {
+    height: 27px;
+    transform: rotate(var(--hour-angle));
+}
+
+.alarm-minute-hand {
+    height: 36px;
+    width: 4px;
+    left: calc(50% - 2px);
+    background: #d63384;
+    transform: rotate(var(--minute-angle));
+}
+
+.alarm-clock-face b {
+    position: absolute;
+    left: calc(50% - 7px);
+    top: calc(50% - 7px);
+    width: 14px;
+    height: 14px;
+    border: 2px solid #3a2e1f;
+    border-radius: 50%;
+    background: #22d3d0;
+}
+
+.alarm-clock-screen {
+    position: relative;
     display: grid;
     align-content: center;
-    gap: 7px;
+    gap: 12px;
     min-width: 0;
-    height: 100%;
-    padding: 11px 13px;
+    min-height: 96px;
+    padding: 16px 16px 14px;
     border: 2px solid #3a2e1f;
-    border-radius: 13px;
-    background: rgba(255, 255, 255, .76);
-    box-shadow: 2px 2px 0 rgba(58, 46, 31, .55);
-}
-
-.alarm-time-tile {
-    background: #fffaf0;
-    transform: rotate(-.25deg);
-}
-
-.alarm-countdown-tile {
-    background: #e8fff8;
-    border-style: dashed;
+    border-radius: 16px;
+    background:
+        linear-gradient(90deg, rgba(214, 51, 132, .11) 0 2px, transparent 2px 100%) 34px 0 / 100% 100% no-repeat,
+        repeating-linear-gradient(0deg, rgba(34, 211, 208, .16) 0 1px, transparent 1px 25px),
+        radial-gradient(circle at 18px 17px, rgba(255, 217, 61, .28) 0 4px, transparent 5px),
+        linear-gradient(135deg, #fffffb, #e8fff8);
+    background-size: auto, auto, 28px 28px, auto;
+    box-shadow: 3px 3px 0 rgba(58, 46, 31, .6), inset 0 0 0 2px rgba(255, 255, 255, .45);
     transform: rotate(.18deg);
 }
 
-.alarm-display span {
-    color: #7a6a4f;
-    font-size: 11px;
-    font-weight: 900;
+.alarm-clock-screen::before {
+    content: '';
+    position: absolute;
+    top: -9px;
+    left: 34px;
+    width: 78px;
+    height: 20px;
+    border-radius: 3px;
+    background: rgba(255, 111, 165, .58);
+    box-shadow: 2px 2px 0 rgba(58, 46, 31, .24);
+    transform: rotate(4deg);
 }
 
-.alarm-display b {
+.alarm-clock-screen::after {
+    content: '';
+    position: absolute;
+    right: 14px;
+    bottom: 13px;
+    width: 86px;
+    height: 9px;
+    border-radius: 999px;
+    background: repeating-linear-gradient(90deg, rgba(58, 46, 31, .28) 0 2px, transparent 2px 10px);
+    opacity: .65;
+}
+
+.alarm-clock-screen small {
+    position: relative;
+    z-index: 1;
+    width: fit-content;
+    padding: 3px 10px;
+    border: 2px solid rgba(58, 46, 31, .72);
+    border-radius: 999px;
+    background: #fff7d6;
+    color: #5f4d34;
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 2px 2px 0 rgba(58, 46, 31, .25);
+}
+
+.alarm-countdown-boxes {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.alarm-countdown-boxes span {
+    position: relative;
+    display: grid;
+    place-items: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 68px;
+    border: 2px solid #3a2e1f;
+    border-radius: 13px;
+    background: #fffaf0;
+    box-shadow: 3px 3px 0 rgba(58, 46, 31, .52);
+}
+
+.alarm-countdown-boxes span::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    right: 18px;
+    width: 36px;
+    height: 12px;
+    border-radius: 2px;
+    background: rgba(34, 211, 208, .48);
+    transform: rotate(-3deg);
+}
+
+.alarm-countdown-boxes span:nth-child(2) {
+    background: #fff7d6;
+    transform: rotate(-.35deg);
+}
+
+.alarm-countdown-boxes span:nth-child(3) {
+    background: #ffe4f0;
+    transform: rotate(.45deg);
+}
+
+.alarm-countdown-boxes span:nth-child(3)::before {
+    background: rgba(255, 217, 61, .7);
+}
+
+.alarm-countdown-boxes span:first-child {
+    transform: rotate(.25deg);
+}
+
+.alarm-countdown-boxes span:first-child::before {
+    background: rgba(255, 111, 165, .42);
+}
+
+.alarm-countdown-boxes b {
     direction: ltr;
     color: #3a2e1f;
     font-family: Lalezar, Vazirmatn, sans-serif;
     font-size: 35px;
-    line-height: .9;
+    line-height: 1;
+    text-shadow: 1px 1px 0 #fff;
 }
 
-.alarm-display strong {
+.alarm-countdown-boxes em {
+    color: #7a6a4f;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 900;
+}
+
+.alarm-clock-screen strong {
+    position: relative;
+    z-index: 1;
     color: #0f766e;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 900;
     text-align: right;
     line-height: 1.55;
@@ -7925,6 +8109,7 @@ body.trello-scroll-lock {
     border: 2px solid rgba(58, 46, 31, .2);
     border-radius: 13px;
     background: rgba(255, 255, 255, .5);
+    box-shadow: inset 0 0 0 2px rgba(255, 217, 61, .2);
 }
 
 .alarm-form label {
@@ -8250,6 +8435,31 @@ body.trello-scroll-lock {
         grid-template-columns: minmax(0, 1fr);
         min-height: 0;
         gap: 8px;
+        justify-items: center;
+    }
+
+    .alarm-clock-face {
+        width: 84px;
+        height: 84px;
+    }
+
+    .alarm-clock-face span {
+        transform: rotate(var(--mark-angle)) translateY(32px);
+        transform-origin: 2px 35px;
+    }
+
+    .alarm-hour-hand {
+        height: 23px;
+    }
+
+    .alarm-minute-hand {
+        height: 31px;
+    }
+
+    .alarm-clock-screen {
+        width: 100%;
+        min-height: 76px;
+        padding: 9px 10px;
     }
 
     .alarm-card .alarm-main::before {
@@ -8270,21 +8480,11 @@ body.trello-scroll-lock {
         opacity: .65;
     }
 
-    .alarm-main.inactive {
-        gap: 0;
-    }
-
-    .alarm-main.inactive .alarm-display,
-    .alarm-main.inactive .alarm-form {
-        display: none;
-    }
-
     .alarm-form {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         padding: 9px;
     }
 
-    .alarm-form label:first-child,
     .alarm-sound-picker {
         grid-column: 1 / -1;
     }
@@ -8293,24 +8493,33 @@ body.trello-scroll-lock {
         min-width: 0;
     }
 
-    .alarm-time-tile,
-    .alarm-countdown-tile {
-        padding: 9px 11px;
-        border-radius: 12px;
+    .alarm-countdown-boxes {
+        direction: ltr;
+        gap: 5px;
     }
 
-    .alarm-display b {
-        font-size: 30px;
+    .alarm-countdown-boxes span {
+        min-height: 48px;
+        gap: 2px;
+        border-radius: 10px;
+        box-shadow: 2px 2px 0 rgba(58, 46, 31, .42);
     }
 
-    .alarm-display strong {
-        font-size: 14px;
+    .alarm-countdown-boxes b {
+        font-size: 23px;
+    }
+
+    .alarm-countdown-boxes em {
+        font-size: 10px;
+    }
+
+    .alarm-clock-screen strong {
+        font-size: 12px;
     }
 }
 
 @media (max-width: 460px) {
-    .alarm-head,
-    .alarm-display {
+    .alarm-head {
         align-items: stretch;
         display: grid;
         grid-template-columns: 1fr;
@@ -8344,7 +8553,7 @@ body.trello-scroll-lock {
         font-size: 12px;
     }
 
-    .alarm-display strong {
+    .alarm-clock-screen strong {
         text-align: right;
     }
 

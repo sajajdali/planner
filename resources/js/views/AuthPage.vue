@@ -65,6 +65,13 @@ function normalizeDigits(value: string) {
     }).replace(/\s|-/g, '');
 }
 
+function apiErrorMessage(errorValue: unknown, fallback: string) {
+    const response = (errorValue as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } }).response;
+    const errors = response?.data?.errors;
+    const firstError = errors ? Object.values(errors).flat()[0] : '';
+    return firstError || response?.data?.message || fallback;
+}
+
 async function sendCode() {
     error.value = '';
     const normalized = normalizeDigits(phone.value);
@@ -85,10 +92,10 @@ async function sendCode() {
         if (!response.sent) {
             error.value = 'پیامک ارسال نشد؛ برای ورود تستی کد 9990 را وارد کن.';
         }
-    } catch {
-        error.value = mode.value === 'login'
+    } catch (err) {
+        error.value = apiErrorMessage(err, mode.value === 'login'
             ? 'حسابی با این شماره پیدا نشد یا پیامک ارسال نشد.'
-            : 'این شماره قبلاً ثبت شده یا پیامک ارسال نشد.';
+            : 'این شماره قبلاً ثبت شده یا پیامک ارسال نشد.');
         phoneSubmitted.value = '';
     }
 }
@@ -106,16 +113,17 @@ async function verifyCode() {
     code.value = normalizedCode;
     codeSubmitted.value = normalizedCode;
 
-    if (mode.value === 'register') {
-        step.value = 'profile';
-        return;
-    }
-
     try {
+        if (mode.value === 'register') {
+            await auth.verifyPhoneCode(phone.value, normalizedCode);
+            step.value = 'profile';
+            return;
+        }
+
         await auth.phoneLogin(phone.value, normalizedCode);
         step.value = 'done';
-    } catch {
-        error.value = 'کد تایید درست نیست یا منقضی شده است.';
+    } catch (err) {
+        error.value = apiErrorMessage(err, 'کد تایید درست نیست یا منقضی شده است.');
         codeSubmitted.value = '';
     }
 }
@@ -154,9 +162,9 @@ async function completeRegister() {
             education: education.value.trim(),
             job: job.value.trim(),
         });
-        step.value = 'done';
-    } catch {
-        error.value = 'این شماره قبلاً ثبت شده یا اطلاعات کامل نیست.';
+        await router.replace('/app');
+    } catch (err) {
+        error.value = apiErrorMessage(err, 'این شماره قبلاً ثبت شده یا اطلاعات کامل نیست.');
     }
 }
 

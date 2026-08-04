@@ -292,10 +292,36 @@ const alarmRemainingLabel = computed(() => {
     if (!alarm.value.enabled) return 'آلارم خاموش است';
     return fa(durationCountdown(alarmRemainingSeconds.value));
 });
+const alarmCountdownClock = computed(() => {
+    if (!alarm.value.enabled || !alarm.value.time) return '--:--:--';
+    const total = alarmRemainingSeconds.value;
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    return fa(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`);
+});
+const alarmCountdownParts = computed(() => {
+    if (!alarm.value.enabled || !alarm.value.time) return { hours: '--', minutes: '--', seconds: '--' };
+    const total = alarmRemainingSeconds.value;
+    return {
+        hours: fa(String(Math.floor(total / 3600)).padStart(2, '0')),
+        minutes: fa(String(Math.floor((total % 3600) / 60)).padStart(2, '0')),
+        seconds: fa(String(total % 60).padStart(2, '0')),
+    };
+});
 const alarmStatusLabel = computed(() => {
     if (!alarm.value.time) return 'یک ساعت انتخاب کن';
     if (!alarm.value.enabled) return `خاموش؛ ساعت ${fa(alarm.value.time)} آماده است`;
     return `زنگ بعدی ساعت ${fa(alarm.value.time)}`;
+});
+const alarmClockStyle = computed(() => {
+    if (!alarm.value.time) return { '--hour-angle': '315deg', '--minute-angle': '90deg' };
+    const [hour, minute] = alarm.value.time.split(':').map(Number);
+    const hourAngle = ((hour % 12) * 30) + (minute * .5);
+    return {
+        '--hour-angle': `${hourAngle}deg`,
+        '--minute-angle': `${minute * 6}deg`,
+    };
 });
 const alarmModeLabel = computed(() => alarm.value.enabled ? 'خاموش کردن' : 'فعال کردن آلارم');
 const isViewingToday = computed(() => date.value === tehranDateString(new Date(nowTick.value)));
@@ -2168,12 +2194,19 @@ onUnmounted(() => {
                                 </button>
                             </header>
                             <div class="alarm-display">
-                                <div class="alarm-time-tile">
-                                    <span>ساعت زنگ</span>
-                                    <b>{{ alarm.time ? fa(alarm.time) : '--:--' }}</b>
+                                <div class="alarm-clock-face" :style="alarmClockStyle">
+                                    <span v-for="mark in 12" :key="`alarm-clock-mark-${mark}`" :style="{ '--mark-angle': `${mark * 30}deg` }"></span>
+                                    <i class="alarm-hour-hand"></i>
+                                    <i class="alarm-minute-hand"></i>
+                                    <b></b>
                                 </div>
-                                <div class="alarm-countdown-tile">
-                                    <span>مانده تا زنگ</span>
+                                <div class="alarm-clock-screen">
+                                    <small>مانده تا زنگ</small>
+                                    <div class="alarm-countdown-boxes">
+                                        <span><b>{{ alarmCountdownParts.hours }}</b><em>ساعت</em></span>
+                                        <span><b>{{ alarmCountdownParts.minutes }}</b><em>دقیقه</em></span>
+                                        <span><b>{{ alarmCountdownParts.seconds }}</b><em>ثانیه</em></span>
+                                    </div>
                                     <strong>{{ alarmRemainingLabel }}</strong>
                                 </div>
                             </div>
