@@ -8486,21 +8486,25 @@ body.trello-scroll-lock {
     }
 
     .alarm-card .alarm-main::before {
-        left: -58px;
-        top: 64%;
-        width: 122px;
-        height: 122px;
-        border-width: 7px;
-        opacity: .62;
+        left: -34px;
+        top: 58%;
+        width: 92px;
+        height: 92px;
+        border-width: 6px;
+        opacity: .22;
+        background:
+            linear-gradient(rgba(58, 46, 31, .12), rgba(58, 46, 31, .12)) 50% 50% / 5px 36px no-repeat,
+            linear-gradient(45deg, transparent 0 48%, rgba(214, 51, 132, .1) 48% 53%, transparent 53%) 50% 50% / 52px 52px no-repeat,
+            radial-gradient(circle, rgba(255, 217, 61, .18) 0 5px, transparent 6px),
+            rgba(255, 255, 255, .12);
     }
 
     .alarm-card .alarm-main::after {
-        left: -10px;
-        top: calc(64% - 42px);
-        width: 54px;
-        height: 54px;
-        border-width: 5px;
-        opacity: .65;
+        display: none;
+    }
+
+    .alarm-main.settings-disabled::before {
+        opacity: .08;
     }
 
     .alarm-form {
@@ -8586,6 +8590,10 @@ body.trello-scroll-lock {
 
     .alarm-form {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .alarm-main.settings-disabled .alarm-form {
+        display: none;
     }
 
     .alarm-sound-picker > div {

@@ -149,6 +149,7 @@ const tableGroupFilter = ref('');
 const seenDueIds = ref<Set<string>>(new Set());
 const { alarm, alarmRemainingSeconds, durationCountdown, resetAlarmRingDateForSelectedTime, saveAlarmSettings, unlockAlarmAudio, playAlarmChime, alarmSounds } = useDashboardAlarm();
 const alarmNotice = ref('');
+const alarmFormRef = ref<HTMLElement | null>(null);
 let alarmNoticeTimer: number | undefined;
 
 const fallbackPriorities: PrioritySetting[] = [
@@ -924,7 +925,14 @@ async function setDashboardAlarm() {
 
 function toggleDashboardAlarm() {
     alarm.value.enabled = !alarm.value.enabled;
-    if (alarm.value.enabled) resetAlarmRingDateForSelectedTime();
+    if (alarm.value.enabled) {
+        resetAlarmRingDateForSelectedTime();
+        nextTick(() => {
+            if (window.matchMedia('(max-width: 760px)').matches) {
+                alarmFormRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    }
     if (!alarm.value.enabled) stopAlarmSound();
     saveAlarmSettings();
     showAlarmNotice(alarm.value.enabled ? 'تنظیمات آلارم فعال شد.' : 'آلارم خاموش شد.');
@@ -2220,7 +2228,7 @@ onUnmounted(() => {
                                     <strong>{{ alarmRemainingLabel }}</strong>
                                 </div>
                             </div>
-                            <div class="alarm-form">
+                            <div ref="alarmFormRef" class="alarm-form">
                                 <label>
                                     <span>عنوان</span>
                                     <input v-model="alarm.title" placeholder="مثلا تماس با مشتری" :disabled="alarmSettingsDisabled" />
