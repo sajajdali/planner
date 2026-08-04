@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDashboardAlarm } from './composables/useDashboardAlarm';
 import { useAuthStore } from './stores/auth';
@@ -10,6 +10,7 @@ const router = useRouter();
 const publicRoutes = ['/', '/login', '/register'];
 const { alarm, alarmRinging, startGlobalAlarmWatcher, stopGlobalAlarmWatcher, stopAlarmSound } = useDashboardAlarm();
 const clockIconPath = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2';
+const alarmIsSet = computed(() => Boolean(auth.user && alarm.value.enabled && alarm.value.time && alarm.value.armedTime === alarm.value.time));
 
 function fa(input: string | number) {
     return String(input).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
@@ -59,6 +60,20 @@ function normalizeInputDigits(event: Event) {
     target.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+function scrollToDashboardAlarm() {
+    window.setTimeout(() => {
+        document.getElementById('dashboard-alarm')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+}
+
+async function openDashboardAlarm() {
+    if (route.path !== '/app') {
+        await router.push({ path: '/app', hash: '#dashboard-alarm' });
+        await nextTick();
+    }
+    scrollToDashboardAlarm();
+}
+
 onMounted(async () => {
     startGlobalAlarmWatcher();
     document.addEventListener('beforeinput', normalizeTypedDigits, true);
@@ -94,6 +109,17 @@ watch(
         <span>در حال آماده‌سازی برنامه...</span>
     </div>
     <RouterView v-else />
+    <button
+        v-if="alarmIsSet"
+        class="alarm-mini-fab"
+        type="button"
+        :title="`آلارم ساعت ${fa(alarm.time)}`"
+        :aria-label="`رفتن به آلارم ساعت ${fa(alarm.time)}`"
+        @click="openDashboardAlarm"
+    >
+        <svg viewBox="0 0 24 24"><path :d="clockIconPath" /></svg>
+        <span>{{ fa(alarm.time) }}</span>
+    </button>
     <div v-if="alarmRinging" class="modal-backdrop alarm-backdrop" dir="rtl">
         <div class="modal-card alarm-ring-modal" role="alertdialog" aria-modal="true">
             <div class="alarm-ring-icon">

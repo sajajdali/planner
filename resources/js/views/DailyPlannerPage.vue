@@ -2202,7 +2202,7 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <section class="alarm-card" :class="{ active: alarmIsConfigured, enabled: alarm.enabled }">
+                    <section id="dashboard-alarm" class="alarm-card" :class="{ active: alarmIsConfigured, enabled: alarm.enabled }">
                         <div class="alarm-main" :class="{ inactive: !alarmIsConfigured, 'settings-disabled': alarmSettingsDisabled }">
                             <header class="alarm-head">
                                 <div>
