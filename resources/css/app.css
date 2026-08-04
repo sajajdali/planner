@@ -2923,8 +2923,13 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
         display: none !important;
     }
 
-    body:has(.notebook-shell.has-active-timer) .alarm-mini-fab {
+    body:has(.notebook-shell.has-active-timer) .alarm-mini-fab:not(.off-dashboard) {
         bottom: 76px !important;
+    }
+
+    .alarm-mini-fab.off-dashboard {
+        left: 16px !important;
+        bottom: 24px !important;
     }
 
     .alarm-mini-fab:hover {
@@ -7645,6 +7650,10 @@ body.trello-scroll-lock {
 
 .alarm-mini-fab:hover {
     transform: translateY(-1px) rotate(-1deg);
+}
+
+.alarm-mini-fab.off-dashboard {
+    left: 24px;
 }
 
 .modal-backdrop {

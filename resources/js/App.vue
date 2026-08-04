@@ -11,6 +11,7 @@ const publicRoutes = ['/', '/login', '/register'];
 const { alarm, alarmRinging, startGlobalAlarmWatcher, stopGlobalAlarmWatcher, stopAlarmSound } = useDashboardAlarm();
 const clockIconPath = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2';
 const alarmIsSet = computed(() => Boolean(auth.user && alarm.value.enabled && alarm.value.time && alarm.value.armedTime === alarm.value.time));
+const alarmIndicatorOnDashboard = computed(() => route.path === '/app');
 
 function fa(input: string | number) {
     return String(input).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
@@ -112,6 +113,7 @@ watch(
     <button
         v-if="alarmIsSet"
         class="alarm-mini-fab"
+        :class="{ 'off-dashboard': !alarmIndicatorOnDashboard }"
         type="button"
         :title="`آلارم ساعت ${fa(alarm.time)}`"
         :aria-label="`رفتن به آلارم ساعت ${fa(alarm.time)}`"
