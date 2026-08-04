@@ -7795,6 +7795,22 @@ body.trello-scroll-lock {
     pointer-events: none;
 }
 
+.alarm-main.settings-disabled .alarm-form {
+    opacity: .34;
+    filter: grayscale(.55);
+    box-shadow: inset 0 0 0 2px rgba(58, 46, 31, .1);
+}
+
+.alarm-main.settings-disabled .alarm-form::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border-radius: 13px;
+    background: rgba(255, 251, 240, .34);
+    pointer-events: none;
+}
+
 .alarm-head {
     position: relative;
     z-index: 1;
@@ -8187,6 +8203,13 @@ body.trello-scroll-lock {
     font-weight: 900;
 }
 
+.alarm-form input:disabled,
+.alarm-form select:disabled,
+.alarm-form button:disabled {
+    opacity: 1;
+    cursor: not-allowed;
+}
+
 .alarm-form select {
     padding-left: 28px;
 }
@@ -8483,6 +8506,10 @@ body.trello-scroll-lock {
     .alarm-form {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         padding: 9px;
+    }
+
+    .alarm-main.settings-disabled .alarm-form {
+        display: none;
     }
 
     .alarm-sound-picker {

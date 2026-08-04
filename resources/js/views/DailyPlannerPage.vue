@@ -309,6 +309,8 @@ const alarmCountdownParts = computed(() => {
         seconds: fa(String(total % 60).padStart(2, '0')),
     };
 });
+const alarmIsConfigured = computed(() => Boolean(alarm.value.enabled && alarm.value.time));
+const alarmSettingsDisabled = computed(() => !alarm.value.enabled);
 const alarmStatusLabel = computed(() => {
     if (!alarm.value.time) return 'یک ساعت انتخاب کن';
     if (!alarm.value.enabled) return `خاموش؛ ساعت ${fa(alarm.value.time)} آماده است`;
@@ -904,6 +906,10 @@ function showAlarmNotice(message: string) {
 }
 
 async function setDashboardAlarm() {
+    if (!alarm.value.enabled) {
+        showAlarmNotice('برای تنظیم، اول آلارم را فعال کن.');
+        return;
+    }
     if (!alarm.value.time) {
         showAlarmNotice('اول ساعت آلارم را انتخاب کن.');
         return;
@@ -925,6 +931,10 @@ function toggleDashboardAlarm() {
 }
 
 async function testDashboardAlarm() {
+    if (!alarm.value.enabled) {
+        showAlarmNotice('برای تست صدا، اول آلارم را فعال کن.');
+        return;
+    }
     await unlockAlarmAudio();
     playAlarmChime();
     showAlarmNotice('صدای آلارم تست شد.');
@@ -2181,8 +2191,8 @@ onUnmounted(() => {
                         </div>
                     </section>
 
-                    <section class="alarm-card" :class="{ active: alarm.enabled }">
-                        <div class="alarm-main" :class="{ inactive: !alarm.enabled }">
+                    <section class="alarm-card" :class="{ active: alarmIsConfigured, enabled: alarm.enabled }">
+                        <div class="alarm-main" :class="{ inactive: !alarmIsConfigured, 'settings-disabled': alarmSettingsDisabled }">
                             <header class="alarm-head">
                                 <div>
                                     <i><svg viewBox="0 0 24 24"><path :d="iconMap.clock" /></svg></i>
@@ -2213,11 +2223,11 @@ onUnmounted(() => {
                             <div class="alarm-form">
                                 <label>
                                     <span>عنوان</span>
-                                    <input v-model="alarm.title" placeholder="مثلا تماس با مشتری" />
+                                    <input v-model="alarm.title" placeholder="مثلا تماس با مشتری" :disabled="alarmSettingsDisabled" />
                                 </label>
                                 <label>
                                     <span>ساعت زنگ</span>
-                                    <input v-model="alarm.time" type="time" />
+                                    <input v-model="alarm.time" type="time" :disabled="alarmSettingsDisabled" />
                                 </label>
                                 <div class="alarm-sound-picker">
                                     <span>صدای زنگ</span>
@@ -2229,6 +2239,7 @@ onUnmounted(() => {
                                             :class="{ active: alarm.sound === sound.key }"
                                             :title="sound.label"
                                             :aria-label="`انتخاب ${sound.label}`"
+                                            :disabled="alarmSettingsDisabled"
                                             @click="alarm.sound = sound.key"
                                         >
                                             <svg viewBox="0 0 24 24"><path :d="iconMap[sound.icon]" /></svg>
@@ -2236,8 +2247,8 @@ onUnmounted(() => {
                                         </button>
                                     </div>
                                 </div>
-                                <button type="button" @click="setDashboardAlarm">تنظیم آلارم</button>
-                                <button type="button" class="ghost" @click="testDashboardAlarm">تست صدا</button>
+                                <button type="button" :disabled="alarmSettingsDisabled" @click="setDashboardAlarm">تنظیم آلارم</button>
+                                <button type="button" class="ghost" :disabled="alarmSettingsDisabled" @click="testDashboardAlarm">تست صدا</button>
                             </div>
                         </div>
                     </section>
