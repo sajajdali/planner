@@ -21,6 +21,14 @@ return new class extends Migration
             });
         }
 
+        $taskGroupForeignKey = $this->foreignKeyName('task_group_id');
+
+        if ($taskGroupForeignKey) {
+            Schema::table('group_task_projects', function (Blueprint $table) use ($taskGroupForeignKey) {
+                $table->dropForeign($taskGroupForeignKey);
+            });
+        }
+
         if ($this->hasIndex('group_task_projects_user_id_task_group_id_unique')) {
             Schema::table('group_task_projects', function (Blueprint $table) {
                 $table->dropUnique('group_task_projects_user_id_task_group_id_unique');
@@ -32,10 +40,27 @@ return new class extends Migration
                 $table->unique(['user_id', 'task_group_id', 'period_type'], 'group_task_projects_user_id_task_group_id_period_type_unique');
             });
         }
+
+        if (! $this->foreignKeyName('task_group_id')) {
+            Schema::table('group_task_projects', function (Blueprint $table) {
+                $table->foreign('task_group_id', 'group_task_projects_task_group_id_foreign')
+                    ->references('id')
+                    ->on('task_groups')
+                    ->cascadeOnDelete();
+            });
+        }
     }
 
     public function down(): void
     {
+        $taskGroupForeignKey = $this->foreignKeyName('task_group_id');
+
+        if ($taskGroupForeignKey) {
+            Schema::table('group_task_projects', function (Blueprint $table) use ($taskGroupForeignKey) {
+                $table->dropForeign($taskGroupForeignKey);
+            });
+        }
+
         if ($this->hasIndex('group_task_projects_user_id_task_group_id_period_type_unique')) {
             Schema::table('group_task_projects', function (Blueprint $table) {
                 $table->dropUnique('group_task_projects_user_id_task_group_id_period_type_unique');
@@ -59,6 +84,15 @@ return new class extends Migration
                 $table->dropColumn('period_type');
             });
         }
+
+        if (! $this->foreignKeyName('task_group_id')) {
+            Schema::table('group_task_projects', function (Blueprint $table) {
+                $table->foreign('task_group_id', 'group_task_projects_task_group_id_foreign')
+                    ->references('id')
+                    ->on('task_groups')
+                    ->cascadeOnDelete();
+            });
+        }
     }
 
     private function hasIndex(string $indexName): bool
@@ -76,5 +110,32 @@ return new class extends Migration
 
         return collect(Schema::getIndexes('group_task_projects'))
             ->contains(fn ($index) => ($index['name'] ?? null) === $indexName);
+    }
+
+    private function foreignKeyName(string $columnName): ?string
+    {
+        $driver = DB::getDriverName();
+
+        if ($driver === 'mysql') {
+            $database = DB::getDatabaseName();
+            $result = DB::selectOne(
+                'select CONSTRAINT_NAME as name
+                 from information_schema.KEY_COLUMN_USAGE
+                 where TABLE_SCHEMA = ?
+                   and TABLE_NAME = ?
+                   and COLUMN_NAME = ?
+                   and REFERENCED_TABLE_NAME is not null
+                 limit 1',
+                [$database, 'group_task_projects', $columnName]
+            );
+
+            return $result->name ?? null;
+        }
+
+        if ($driver === 'sqlite') {
+            return null;
+        }
+
+        return null;
     }
 };
