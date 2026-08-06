@@ -9,25 +9,20 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('group_task_items')) {
+            DB::table('group_task_items')->delete();
+        }
+
+        DB::table('group_task_projects')->delete();
+
         if (! Schema::hasColumn('group_task_projects', 'period_type')) {
             Schema::table('group_task_projects', function (Blueprint $table) {
                 $table->string('period_type', 20)->default('general')->after('task_group_id');
             });
         }
 
-        if (! $this->hasIndex('group_task_projects_task_group_id_index')) {
-            Schema::table('group_task_projects', function (Blueprint $table) {
-                $table->index('task_group_id', 'group_task_projects_task_group_id_index');
-            });
-        }
-
-        $taskGroupForeignKey = $this->foreignKeyName('task_group_id');
-
-        if ($taskGroupForeignKey) {
-            Schema::table('group_task_projects', function (Blueprint $table) use ($taskGroupForeignKey) {
-                $table->dropForeign($taskGroupForeignKey);
-            });
-        }
+        $this->dropForeignKeys(['user_id', 'category_id', 'task_group_id']);
+        $this->ensureSupportingIndexes();
 
         if ($this->hasIndex('group_task_projects_user_id_task_group_id_unique')) {
             Schema::table('group_task_projects', function (Blueprint $table) {
@@ -41,25 +36,12 @@ return new class extends Migration
             });
         }
 
-        if (! $this->foreignKeyName('task_group_id')) {
-            Schema::table('group_task_projects', function (Blueprint $table) {
-                $table->foreign('task_group_id', 'group_task_projects_task_group_id_foreign')
-                    ->references('id')
-                    ->on('task_groups')
-                    ->cascadeOnDelete();
-            });
-        }
+        $this->restoreForeignKeys();
     }
 
     public function down(): void
     {
-        $taskGroupForeignKey = $this->foreignKeyName('task_group_id');
-
-        if ($taskGroupForeignKey) {
-            Schema::table('group_task_projects', function (Blueprint $table) use ($taskGroupForeignKey) {
-                $table->dropForeign($taskGroupForeignKey);
-            });
-        }
+        $this->dropForeignKeys(['user_id', 'category_id', 'task_group_id']);
 
         if ($this->hasIndex('group_task_projects_user_id_task_group_id_period_type_unique')) {
             Schema::table('group_task_projects', function (Blueprint $table) {
@@ -73,26 +55,13 @@ return new class extends Migration
             });
         }
 
-        if ($this->hasIndex('group_task_projects_task_group_id_index')) {
-            Schema::table('group_task_projects', function (Blueprint $table) {
-                $table->dropIndex('group_task_projects_task_group_id_index');
-            });
-        }
-
         if (Schema::hasColumn('group_task_projects', 'period_type')) {
             Schema::table('group_task_projects', function (Blueprint $table) {
                 $table->dropColumn('period_type');
             });
         }
 
-        if (! $this->foreignKeyName('task_group_id')) {
-            Schema::table('group_task_projects', function (Blueprint $table) {
-                $table->foreign('task_group_id', 'group_task_projects_task_group_id_foreign')
-                    ->references('id')
-                    ->on('task_groups')
-                    ->cascadeOnDelete();
-            });
-        }
+        $this->restoreForeignKeys();
     }
 
     private function hasIndex(string $indexName): bool
@@ -137,5 +106,61 @@ return new class extends Migration
         }
 
         return null;
+    }
+
+    private function dropForeignKeys(array $columns): void
+    {
+        foreach ($columns as $column) {
+            $foreignKey = $this->foreignKeyName($column);
+
+            if (! $foreignKey) {
+                continue;
+            }
+
+            Schema::table('group_task_projects', function (Blueprint $table) use ($foreignKey) {
+                $table->dropForeign($foreignKey);
+            });
+        }
+    }
+
+    private function ensureSupportingIndexes(): void
+    {
+        $indexes = [
+            'user_id' => 'group_task_projects_user_id_index',
+            'category_id' => 'group_task_projects_category_id_index',
+            'task_group_id' => 'group_task_projects_task_group_id_index',
+        ];
+
+        foreach ($indexes as $column => $indexName) {
+            if ($this->hasIndex($indexName)) {
+                continue;
+            }
+
+            Schema::table('group_task_projects', function (Blueprint $table) use ($column, $indexName) {
+                $table->index($column, $indexName);
+            });
+        }
+    }
+
+    private function restoreForeignKeys(): void
+    {
+        $foreignKeys = [
+            'user_id' => ['users', 'id', 'group_task_projects_user_id_foreign'],
+            'category_id' => ['categories', 'id', 'group_task_projects_category_id_foreign'],
+            'task_group_id' => ['task_groups', 'id', 'group_task_projects_task_group_id_foreign'],
+        ];
+
+        foreach ($foreignKeys as $column => [$tableName, $referenceColumn, $foreignKeyName]) {
+            if ($this->foreignKeyName($column)) {
+                continue;
+            }
+
+            Schema::table('group_task_projects', function (Blueprint $table) use ($column, $tableName, $referenceColumn, $foreignKeyName) {
+                $table->foreign($column, $foreignKeyName)
+                    ->references($referenceColumn)
+                    ->on($tableName)
+                    ->cascadeOnDelete();
+            });
+        }
     }
 };
