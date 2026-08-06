@@ -33,9 +33,11 @@ Route::prefix('api')->group(function () {
         Route::delete('/task-groups/{taskGroup}', [PlannerController::class, 'destroyTaskGroup']);
         Route::get('/group-tasks', [PlannerController::class, 'groupTasks']);
         Route::post('/group-task-projects', [PlannerController::class, 'storeGroupTaskProject']);
+        Route::put('/group-task-projects/{project}', [PlannerController::class, 'updateGroupTaskProject']);
         Route::delete('/group-task-projects/{project}', [PlannerController::class, 'destroyGroupTaskProject']);
         Route::post('/group-task-projects/{project}/items', [PlannerController::class, 'storeGroupTaskItem']);
         Route::post('/group-task-projects/{project}/items/reorder', [PlannerController::class, 'reorderGroupTaskItems']);
+        Route::post('/group-task-items/{item}/move-period', [PlannerController::class, 'moveGroupTaskItemPeriod']);
         Route::put('/group-task-items/{item}', [PlannerController::class, 'updateGroupTaskItem']);
         Route::delete('/group-task-items/{item}', [PlannerController::class, 'destroyGroupTaskItem']);
         Route::get('/priorities', [PlannerController::class, 'priorities']);

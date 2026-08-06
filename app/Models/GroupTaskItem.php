@@ -9,6 +9,7 @@ class GroupTaskItem extends Model
     protected $fillable = [
         'group_task_project_id',
         'title',
+        'period_type',
         'is_done',
         'sort_order',
     ];

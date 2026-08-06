@@ -3694,8 +3694,17 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
         padding: 0;
     }
 
-    .task-title .refer-text-badge,
     .task-title .done-badge {
+        white-space: nowrap;
+    }
+
+    .task-title .refer-text-badge {
+        min-width: 54px;
+        height: 22px;
+        margin: 0 !important;
+        padding: 0 7px !important;
+        font-size: 9.5px;
+        line-height: 1;
         white-space: nowrap;
     }
 
@@ -4716,17 +4725,28 @@ body {
 .refer-text-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     height: 24px;
+    min-width: 58px;
     padding: 0 8px !important;
     border: 1px solid #14b8a6;
     border-radius: 999px;
     background: #ecfdf5;
     color: #0f766e;
     box-shadow: none;
+    box-sizing: border-box;
+    font-family: inherit;
     font-size: 10.5px;
     font-weight: 900;
     line-height: 1;
+    font-style: normal;
     white-space: nowrap;
+}
+
+.task-title .refer-text-badge {
+    flex: 0 0 auto;
+    margin: 0;
+    transform: translateY(0);
 }
 
 .refer-badge svg,

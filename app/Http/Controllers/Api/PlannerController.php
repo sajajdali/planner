@@ -36,6 +36,8 @@ use Illuminate\Validation\Rule;
 
 class PlannerController extends Controller
 {
+    private const GROUP_TASK_PERIODS = ['weekly', 'monthly', 'general'];
+
     public function daily(Request $request)
     {
         $date = $request->query('date', now($request->user()->timezone)->toDateString());
@@ -948,7 +950,10 @@ class PlannerController extends Controller
                     ->values(),
                 'projects' => $projects
                     ->where('category_id', $category->id)
-                    ->map(fn (GroupTaskProject $project) => $this->groupTaskProjectPayload($project))
+                    ->groupBy('task_group_id')
+                    ->map(function ($projectRows) {
+                        return $this->groupTaskProjectPayload($this->mergedGroupTaskProject($projectRows->first()));
+                    })
                     ->values(),
             ])->values(),
         ];
@@ -970,17 +975,55 @@ class PlannerController extends Controller
 
         $project = GroupTaskProject::firstOrCreate(
             ['user_id' => $request->user()->id, 'task_group_id' => $group->id],
-            ['category_id' => $group->category_id, 'sort_order' => $sortOrder],
+            ['category_id' => $group->category_id, 'period_type' => 'general', 'sort_order' => $sortOrder],
         );
 
-        return $this->groupTaskProjectPayload($project->load(['taskGroup', 'items']));
+        return $this->groupTaskProjectPayload($this->mergedGroupTaskProject($project->load(['taskGroup', 'items'])));
+    }
+
+    public function updateGroupTaskProject(Request $request, GroupTaskProject $project)
+    {
+        abort_unless($project->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'period_type' => ['required', Rule::in(self::GROUP_TASK_PERIODS)],
+        ]);
+
+        if ($project->period_type === $data['period_type']) {
+            return $this->groupTaskProjectPayload($project->load(['taskGroup', 'items']));
+        }
+
+        $existing = GroupTaskProject::query()
+            ->where('user_id', $request->user()->id)
+            ->where('task_group_id', $project->task_group_id)
+            ->where('period_type', $data['period_type'])
+            ->whereKeyNot($project->id)
+            ->first();
+
+        if ($existing) {
+            abort(422, 'این پروژه از قبل در این بازه وجود دارد.');
+        }
+
+        $sortOrder = GroupTaskProject::where('user_id', $request->user()->id)
+            ->where('category_id', $project->category_id)
+            ->where('period_type', $data['period_type'])
+            ->max('sort_order') + 1;
+
+        $project->update([
+            'period_type' => $data['period_type'],
+            'sort_order' => $sortOrder,
+        ]);
+
+        return $this->groupTaskProjectPayload($this->mergedGroupTaskProject($project->fresh(['taskGroup', 'items'])));
     }
 
     public function destroyGroupTaskProject(Request $request, GroupTaskProject $project)
     {
         abort_unless($project->user_id === $request->user()->id, 404);
 
-        $project->delete();
+        GroupTaskProject::where('user_id', $request->user()->id)
+            ->where('task_group_id', $project->task_group_id)
+            ->delete();
 
         return response()->noContent();
     }
@@ -991,11 +1034,13 @@ class PlannerController extends Controller
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
+            'period_type' => ['nullable', Rule::in(self::GROUP_TASK_PERIODS)],
         ]);
 
         $sortOrder = $project->items()->max('sort_order') + 1;
         $item = $project->items()->create([
             'title' => trim($data['title']),
+            'period_type' => $data['period_type'] ?? 'general',
             'sort_order' => $sortOrder,
             'is_done' => false,
         ]);
@@ -1034,6 +1079,24 @@ class PlannerController extends Controller
         foreach ($data['item_ids'] as $index => $itemId) {
             $items->get((int) $itemId)?->update(['sort_order' => $index + 1]);
         }
+
+        return $this->groupTaskProjectPayload($this->mergedGroupTaskProject($project->fresh(['taskGroup', 'items'])));
+    }
+
+    public function moveGroupTaskItemPeriod(Request $request, GroupTaskItem $item)
+    {
+        $item->load('project');
+        $project = $item->project;
+        abort_unless($project?->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'period_type' => ['required', Rule::in(self::GROUP_TASK_PERIODS)],
+        ]);
+
+        $item->update([
+            'period_type' => $data['period_type'],
+            'sort_order' => $project->items()->where('period_type', $data['period_type'])->max('sort_order') + 1,
+        ]);
 
         return $this->groupTaskProjectPayload($project->fresh(['taskGroup', 'items']));
     }
@@ -2706,10 +2769,35 @@ class PlannerController extends Controller
             'items' => $project->items->map(fn (GroupTaskItem $item) => [
                 'id' => $item->id,
                 'title' => $item->title,
+                'period_type' => $item->period_type ?? 'general',
                 'is_done' => $item->is_done,
                 'sort_order' => $item->sort_order,
             ])->values(),
         ];
+    }
+
+    private function mergedGroupTaskProject(GroupTaskProject $project): GroupTaskProject
+    {
+        $rows = GroupTaskProject::query()
+            ->with('items')
+            ->where('user_id', $project->user_id)
+            ->where('task_group_id', $project->task_group_id)
+            ->orderBy('sort_order')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return $project;
+        }
+
+        $base = $rows->first();
+        $base->setRelation(
+            'items',
+            $rows->flatMap(fn (GroupTaskProject $row) => $row->items)
+                ->sortBy('sort_order')
+                ->values()
+        );
+
+        return $base;
     }
 
     private function validatedTaskGroupId(int $userId, int $categoryId, mixed $taskGroupId): ?int

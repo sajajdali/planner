@@ -10,6 +10,7 @@ class GroupTaskProject extends Model
         'user_id',
         'category_id',
         'task_group_id',
+        'period_type',
         'sort_order',
     ];
 
