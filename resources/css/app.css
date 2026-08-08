@@ -1317,7 +1317,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     background: transparent;
     box-shadow: none;
     color: #3a2e1f;
-    font-family: Vazirmatn, sans-serif;
+    font-family: Lalezar, Vazirmatn, sans-serif;
     font-size: 21px;
     font-weight: 800;
     line-height: 33px;
@@ -1336,7 +1336,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; display: grid; gap: 20p
     gap: 12px;
     padding-top: 4px;
     color: #8a7a5b;
-    font-family: Vazirmatn, sans-serif;
+    font-family: Lalezar, Vazirmatn, sans-serif;
     font-size: 12px;
     font-weight: 900;
 }

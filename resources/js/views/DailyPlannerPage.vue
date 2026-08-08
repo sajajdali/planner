@@ -553,8 +553,14 @@ const financeSummaryStats = computed(() => {
     ];
 });
 
+function toPersianDigits(input: string | number) {
+    return String(input)
+        .replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)])
+        .replace(/[٠-٩]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'['٠١٢٣٤٥٦٧٨٩'.indexOf(digit)]);
+}
+
 function fa(input: string | number) {
-    return String(input).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
+    return toPersianDigits(input);
 }
 
 function tehranDateString(value = new Date()) {
@@ -1076,9 +1082,18 @@ function resizeDailyNote() {
     textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
-function handleDailyNoteInput() {
+function handleDailyNoteInput(event?: Event) {
+    const textarea = event?.target instanceof HTMLTextAreaElement ? event.target : dailyNoteRef.value;
+    const selectionStart = textarea?.selectionStart ?? null;
+    const selectionEnd = textarea?.selectionEnd ?? null;
+    dailyNote.value = toPersianDigits(dailyNote.value);
     noteSaved.value = false;
-    resizeDailyNote();
+    void nextTick(() => {
+        if (textarea && selectionStart !== null && selectionEnd !== null) {
+            textarea.setSelectionRange(selectionStart, selectionEnd);
+        }
+        resizeDailyNote();
+    });
 }
 
 function shiftDate(days: number) {
@@ -2991,7 +3006,7 @@ onUnmounted(() => {
                             v-model="dailyNote"
                             placeholder="هر چیزی که دوست داری برای امروز بنویس..."
                             rows="1"
-                            @input="handleDailyNoteInput"
+                            @input="handleDailyNoteInput($event)"
                             @keydown.meta.enter.prevent="saveDailyNote"
                         ></textarea>
                         <div class="daily-note-foot">
