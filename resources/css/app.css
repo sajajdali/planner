@@ -8976,6 +8976,11 @@ body.trello-scroll-lock {
     background: #22d3d0;
 }
 
+.jalali-days button.empty {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .jalali-days button.selected {
     background: #d63384;
     color: #fff;

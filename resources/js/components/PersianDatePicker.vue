@@ -20,6 +20,10 @@ const month = ref(0);
 
 const monthName = computed(() => ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'][month.value - 1] ?? '');
 const days = computed(() => year.value && month.value ? Array.from({ length: jalaaliMonthLength(year.value, month.value) }, (_, index) => index + 1) : []);
+const cells = computed(() => {
+    const emptyCells = Array.from({ length: monthStartOffset(year.value, month.value) }, () => null);
+    return [...emptyCells, ...days.value];
+});
 const displayValue = computed(() => props.modelValue ? isoToJalali(props.modelValue) : '');
 
 watch(() => props.modelValue, syncMonth, { immediate: true });
@@ -49,6 +53,18 @@ function isoToJalali(value: string) {
     const [gy, gm, gd] = value.split('-').map(Number);
     const j = toJalaali(gy, gm, gd);
     return fa(`${j.jy}/${String(j.jm).padStart(2, '0')}/${String(j.jd).padStart(2, '0')}`);
+}
+
+function dateFromYmd(value: string) {
+    const [gy, gm, gd] = value.split('-').map(Number);
+    return new Date(gy, gm - 1, gd, 12, 0, 0);
+}
+
+function monthStartOffset(jy: number, jm: number) {
+    if (!jy || !jm) return 0;
+    const firstDay = toGregorian(jy, jm, 1);
+    const weekDay = dateFromYmd(`${firstDay.gy}-${String(firstDay.gm).padStart(2, '0')}-${String(firstDay.gd).padStart(2, '0')}`).getDay();
+    return (weekDay + 1) % 7;
 }
 
 function selectDay(day: number) {
@@ -146,8 +162,8 @@ onBeforeUnmount(() => {
                     <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
                 </div>
                 <div class="jalali-days">
-                    <button v-for="day in days" :key="day" type="button" :class="{ selected: selected(day) }" @click="selectDay(day)">
-                        {{ fa(day) }}
+                    <button v-for="(day, index) in cells" :key="day ? `day-${day}` : `empty-${index}`" type="button" :class="{ selected: Boolean(day && selected(day)), empty: !day }" :disabled="!day" @click="day && selectDay(day)">
+                        {{ day ? fa(day) : '' }}
                     </button>
                 </div>
             </div>

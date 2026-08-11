@@ -407,7 +407,7 @@ const dueNotifications = computed<DueNotification[]>(() => {
 const persianDate = computed(() => {
     const [gy, gm, gd] = date.value.split('-').map(Number);
     const j = toJalaali(gy, gm, gd);
-    const weekday = new Intl.DateTimeFormat('fa-IR', { weekday: 'long', timeZone: 'Asia/Tehran' }).format(dateFromYmd(date.value));
+    const weekday = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'][dateFromYmd(date.value).getDay()];
     const month = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'][j.jm - 1];
     return `${weekday} ${fa(j.jd)} ${month} ${fa(j.jy)}`;
 });
@@ -454,6 +454,10 @@ const jalaliMonthName = computed(() => ['فروردین', 'اردیبهشت', '�
 const calendarDays = computed(() => {
     if (!calendarYear.value || !calendarMonth.value) return [];
     return Array.from({ length: jalaaliMonthLength(calendarYear.value, calendarMonth.value) }, (_, index) => index + 1);
+});
+const calendarCells = computed(() => {
+    const emptyCells = Array.from({ length: jalaliMonthStartOffset(calendarYear.value, calendarMonth.value) }, () => null);
+    return [...emptyCells, ...calendarDays.value];
 });
 const totalPlannedMinutes = computed(() => tasks.value.reduce((sum, task) => {
     if (!task.planned_start_time || !task.planned_end_time) return sum;
@@ -580,6 +584,13 @@ function tehranDateString(value = new Date()) {
 function dateFromYmd(value: string) {
     const [year, month, day] = value.split('-').map(Number);
     return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function jalaliMonthStartOffset(year: number, month: number) {
+    if (!year || !month) return 0;
+    const firstDay = toGregorian(year, month, 1);
+    const weekDay = dateFromYmd(`${firstDay.gy}-${String(firstDay.gm).padStart(2, '0')}-${String(firstDay.gd).padStart(2, '0')}`).getDay();
+    return (weekDay + 1) % 7;
 }
 
 function shiftYmd(value: string, days: number) {
@@ -3302,8 +3313,8 @@ onUnmounted(() => {
                             <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
                         </div>
                         <div class="jalali-days">
-                            <button v-for="day in calendarDays" :key="`refer-day-${day}`" type="button" :class="{ selected: isSelectedReferJalaliDay(day) }" @click="selectReferJalaliDay(day)">
-                                {{ fa(day) }}
+                            <button v-for="(day, index) in calendarCells" :key="day ? `refer-day-${day}` : `refer-empty-${index}`" type="button" :class="{ selected: Boolean(day && isSelectedReferJalaliDay(day)), empty: !day }" :disabled="!day" @click="day && selectReferJalaliDay(day)">
+                                {{ day ? fa(day) : '' }}
                             </button>
                         </div>
                     </div>
