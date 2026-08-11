@@ -59,7 +59,7 @@ const txByDate = computed(() => {
     return map;
 });
 const calendarCells = computed(() => {
-    const first = new Date(startEnd.value.start);
+    const first = dateFromYmd(startEnd.value.start);
     const offset = (first.getDay() + 1) % 7;
     const cells: Array<{ empty?: boolean; day?: number; date?: string; income?: number; expense?: number; today?: boolean }> = [];
     for (let i = 0; i < offset; i++) cells.push({ empty: true });
@@ -85,7 +85,7 @@ const selectedDayExpense = computed(() => selectedDayItems.value.filter((item) =
 const datePickerCells = computed(() => {
     if (!datePicker.value) return [];
     const first = toGregorian(datePicker.value.jy, datePicker.value.jm, 1);
-    const offset = (new Date(ymd(first.gy, first.gm, first.gd)).getDay() + 1) % 7;
+    const offset = (dateFromYmd(ymd(first.gy, first.gm, first.gd)).getDay() + 1) % 7;
     const cells: Array<{ empty?: boolean; day?: number; date?: string; today?: boolean; selected?: boolean }> = [];
     const selected = selectedPickerDate();
     const today = new Date();
@@ -133,6 +133,10 @@ function en(value: string) {
 }
 function ymd(y: number, m: number, d: number) {
     return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function dateFromYmd(value: string) {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0);
 }
 function money(value: number | string) {
     return `${fa(Number(value || 0).toLocaleString('en-US'))} تومان`;
@@ -357,9 +361,18 @@ async function undoPayment(payment: ObligationPayment) {
 
                 <section class="finance-block-head">
                     <div class="section-title"><i style="background:#16A34A"></i><b>آخرین تراکنش‌ها</b></div>
-                    <button @click="toggleCalendar">مشاهده تقویم روزانه</button>
+                    <button @click="toggleCalendar">{{ calendarOpen ? 'بستن تقویم روزانه' : 'مشاهده تقویم روزانه' }}</button>
                 </section>
                 <p class="tx-summary">{{ fa(transactions.length) }} تراکنش · واریز {{ money(totals.income) }} · برداشت {{ money(totals.expense) }}</p>
+                <section v-if="calendarOpen" ref="financeCalendarRef" class="finance-calendar">
+                    <div class="calendar-stats"><b>{{ money(totals.income) }}</b><b class="out">{{ money(totals.expense) }}</b><b>{{ money(totals.income - totals.expense) }}</b></div>
+                    <div class="weekdays"><span v-for="wd in weekNames" :key="wd">{{ wd }}</span></div>
+                    <div class="calendar-grid">
+                        <button v-for="(cell, index) in calendarCells" :key="index" :class="{ empty: cell.empty, today: cell.today }" @click="cell.date && (dayModal = { date: cell.date, day: cell.day! })">
+                            <template v-if="!cell.empty"><strong>{{ fa(cell.day!) }}</strong><span v-if="cell.income">+{{ shortMoney(cell.income) }}</span><em v-if="cell.expense">-{{ shortMoney(cell.expense) }}</em></template>
+                        </button>
+                    </div>
+                </section>
                 <section class="tx-grid">
                     <div>
                         <h3><i></i><span>آخرین واریزها</span></h3>
@@ -370,16 +383,6 @@ async function undoPayment(payment: ObligationPayment) {
                         <h3 class="red"><i></i><span>آخرین برداشت‌ها</span></h3>
                         <article v-for="item in withdrawals" :key="item.id" class="out"><i></i><span>{{ item.title }}<small>{{ item.account?.name }} · {{ dateLabel(item.expense_date) }}</small></span><b>- {{ money(item.amount) }}</b></article>
                         <div v-if="!withdrawals.length" class="finance-empty-card tx-empty out"><i>-</i><div><b>برداشتی ثبت نشده.</b><span>برداشت‌های جدید اینجا دیده می‌شوند.</span></div></div>
-                    </div>
-                </section>
-
-                <section v-if="calendarOpen" ref="financeCalendarRef" class="finance-calendar">
-                    <div class="calendar-stats"><b>{{ money(totals.income) }}</b><b class="out">{{ money(totals.expense) }}</b><b>{{ money(totals.income - totals.expense) }}</b></div>
-                    <div class="weekdays"><span v-for="wd in weekNames" :key="wd">{{ wd }}</span></div>
-                    <div class="calendar-grid">
-                        <button v-for="(cell, index) in calendarCells" :key="index" :class="{ empty: cell.empty, today: cell.today }" @click="cell.date && (dayModal = { date: cell.date, day: cell.day! })">
-                            <template v-if="!cell.empty"><strong>{{ fa(cell.day!) }}</strong><span v-if="cell.income">+{{ shortMoney(cell.income) }}</span><em v-if="cell.expense">-{{ shortMoney(cell.expense) }}</em></template>
-                        </button>
                     </div>
                 </section>
             </main>
