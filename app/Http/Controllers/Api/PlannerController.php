@@ -19,6 +19,7 @@ use App\Models\GoalPlanItem;
 use App\Models\GoalProgressLog;
 use App\Models\GroupTaskItem;
 use App\Models\GroupTaskProject;
+use App\Models\GroupDailyChecklistItem;
 use App\Models\MealEntry;
 use App\Models\NotebookNote;
 use App\Models\NotebookNoteGroup;
@@ -919,6 +920,7 @@ class PlannerController extends Controller
     public function groupTasks(Request $request)
     {
         $userId = $request->user()->id;
+        $today = now($request->user()->timezone)->toDateString();
         $categories = Category::query()
             ->where('user_id', $userId)
             ->where('is_active', true)
@@ -945,6 +947,17 @@ class PlannerController extends Controller
                 ->whereDate('checklist_date', now($request->user()->timezone)->toDateString())
                 ->orderBy('id')
                 ->get(),
+            'dailyChecklist' => [
+                'date' => $today,
+                'items' => $this->groupDailyChecklistItems($userId, $today),
+                // Entries become archive history when their date is before today; no cron job is needed.
+                'archives' => GroupDailyChecklistItem::query()
+                    ->where('user_id', $userId)->whereDate('checklist_date', '<', $today)
+                    ->orderByDesc('checklist_date')->orderBy('sort_order')->get()
+                    ->groupBy(fn (GroupDailyChecklistItem $item) => $item->checklist_date->toDateString())
+                    ->map(fn ($items, $date) => ['date' => $date, 'items' => $items->map(fn (GroupDailyChecklistItem $item) => $this->groupDailyChecklistItemPayload($item))->values()])
+                    ->values(),
+            ],
             'sections' => $categories->map(fn (Category $category) => [
                 'id' => $category->id,
                 'name' => $category->name,
@@ -989,6 +1002,54 @@ class PlannerController extends Controller
     public function destroyTeamDailyChecklistItem(Request $request, TeamDailyChecklistItem $item)
     {
         abort_unless($item->user_id === $request->user()->id, 404);
+        $item->delete();
+
+        return response()->noContent();
+    }
+
+    public function storeGroupDailyChecklistItem(Request $request)
+    {
+        $data = $request->validate(['title' => ['required', 'string', 'max:255']]);
+        $user = $request->user();
+        $date = now($user->timezone)->toDateString();
+        $item = GroupDailyChecklistItem::create([
+            'user_id' => $user->id, 'checklist_date' => $date, 'title' => trim($data['title']), 'is_done' => false,
+            'sort_order' => GroupDailyChecklistItem::where('user_id', $user->id)->whereDate('checklist_date', $date)->max('sort_order') + 1,
+        ]);
+
+        return $this->groupDailyChecklistItemPayload($item);
+    }
+
+    public function updateGroupDailyChecklistItem(Request $request, GroupDailyChecklistItem $item)
+    {
+        abort_unless($item->user_id === $request->user()->id, 404);
+        abort_if($item->checklist_date->toDateString() !== now($request->user()->timezone)->toDateString(), 422, 'فقط چک‌لیست امروز قابل ویرایش است.');
+        $data = $request->validate(['title' => ['nullable', 'string', 'max:255'], 'is_done' => ['nullable', 'boolean']]);
+        $item->update(['title' => isset($data['title']) ? trim($data['title']) : $item->title, 'is_done' => $data['is_done'] ?? $item->is_done]);
+
+        return $this->groupDailyChecklistItemPayload($item->fresh());
+    }
+
+    public function reorderGroupDailyChecklistItems(Request $request)
+    {
+        $data = $request->validate(['item_ids' => ['required', 'array'], 'item_ids.*' => ['integer']]);
+        $user = $request->user();
+        $today = now($user->timezone)->toDateString();
+        $items = GroupDailyChecklistItem::query()
+            ->where('user_id', $user->id)->whereDate('checklist_date', $today)
+            ->whereIn('id', $data['item_ids'])->get()->keyBy('id');
+
+        foreach ($data['item_ids'] as $index => $itemId) {
+            $items->get((int) $itemId)?->update(['sort_order' => $index + 1]);
+        }
+
+        return $this->groupDailyChecklistItems($user->id, $today);
+    }
+
+    public function destroyGroupDailyChecklistItem(Request $request, GroupDailyChecklistItem $item)
+    {
+        abort_unless($item->user_id === $request->user()->id, 404);
+        abort_if($item->checklist_date->toDateString() !== now($request->user()->timezone)->toDateString(), 422, 'فقط چک‌لیست امروز قابل ویرایش است.');
         $item->delete();
 
         return response()->noContent();
@@ -2786,6 +2847,17 @@ class PlannerController extends Controller
             'soft_color' => $group->soft_color,
             'already_added' => $alreadyAdded,
         ];
+    }
+
+    private function groupDailyChecklistItems(int $userId, string $date)
+    {
+        return GroupDailyChecklistItem::query()->where('user_id', $userId)->whereDate('checklist_date', $date)
+            ->orderBy('sort_order')->get()->map(fn (GroupDailyChecklistItem $item) => $this->groupDailyChecklistItemPayload($item))->values();
+    }
+
+    private function groupDailyChecklistItemPayload(GroupDailyChecklistItem $item): array
+    {
+        return ['id' => $item->id, 'title' => $item->title, 'is_done' => $item->is_done, 'sort_order' => $item->sort_order];
     }
 
     private function groupTaskProjectPayload(GroupTaskProject $project): array
