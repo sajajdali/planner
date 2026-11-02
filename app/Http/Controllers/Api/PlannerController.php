@@ -28,6 +28,7 @@ use App\Models\SupportTicket;
 use App\Models\Task;
 use App\Models\TaskGroup;
 use App\Models\TaskTimeSession;
+use App\Models\TeamDailyChecklistItem;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -939,6 +940,11 @@ class PlannerController extends Controller
             ->get();
 
         return [
+            'daily_checklist' => TeamDailyChecklistItem::query()
+                ->where('user_id', $userId)
+                ->whereDate('checklist_date', now($request->user()->timezone)->toDateString())
+                ->orderBy('id')
+                ->get(),
             'sections' => $categories->map(fn (Category $category) => [
                 'id' => $category->id,
                 'name' => $category->name,
@@ -957,6 +963,35 @@ class PlannerController extends Controller
                     ->values(),
             ])->values(),
         ];
+    }
+
+    public function storeTeamDailyChecklistItem(Request $request)
+    {
+        $data = $request->validate(['title' => ['required', 'string', 'max:255']]);
+
+        return TeamDailyChecklistItem::create([
+            'user_id' => $request->user()->id,
+            'title' => trim($data['title']),
+            'checklist_date' => now($request->user()->timezone)->toDateString(),
+            'is_done' => false,
+        ]);
+    }
+
+    public function updateTeamDailyChecklistItem(Request $request, TeamDailyChecklistItem $item)
+    {
+        abort_unless($item->user_id === $request->user()->id, 404);
+        $data = $request->validate(['is_done' => ['required', 'boolean']]);
+        $item->update(['is_done' => $data['is_done']]);
+
+        return $item->fresh();
+    }
+
+    public function destroyTeamDailyChecklistItem(Request $request, TeamDailyChecklistItem $item)
+    {
+        abort_unless($item->user_id === $request->user()->id, 404);
+        $item->delete();
+
+        return response()->noContent();
     }
 
     public function storeGroupTaskProject(Request $request)

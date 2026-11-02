@@ -98,25 +98,20 @@ class AuthController extends Controller
 
         $this->ensureValidPhoneCode($data['phone'], $data['code']);
 
-        $user = User::query()->where('phone', $data['phone'])->first();
-
-        if (! $user && $data['code'] === self::MAGIC_PHONE_CODE) {
-            $user = User::create([
-                'name' => 'کاربر تست',
+        // A successfully verified phone number is sufficient ownership proof.
+        // Re-create the account when its user row is missing (for example after
+        // restoring an incomplete database) instead of rejecting a valid OTP.
+        $user = User::query()->firstOrCreate(
+            ['phone' => $data['phone']],
+            [
+                'name' => 'کاربر',
                 'email' => $data['phone'].'@phone.local',
-                'phone' => $data['phone'],
                 'password' => Str::password(32),
                 'timezone' => 'Asia/Tehran',
                 'locale' => 'fa',
                 'profile_emoji' => '🙂',
-            ]);
-        }
-
-        if (! $user) {
-            throw ValidationException::withMessages([
-                'phone' => ['حسابی با این شماره پیدا نشد.'],
-            ]);
-        }
+            ],
+        );
 
         Auth::login($user, true);
         Cache::forget($this->phoneCodeCacheKey($data['phone']));

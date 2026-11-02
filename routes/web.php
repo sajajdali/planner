@@ -32,6 +32,9 @@ Route::prefix('api')->group(function () {
         Route::put('/task-groups/{taskGroup}', [PlannerController::class, 'updateTaskGroup']);
         Route::delete('/task-groups/{taskGroup}', [PlannerController::class, 'destroyTaskGroup']);
         Route::get('/group-tasks', [PlannerController::class, 'groupTasks']);
+        Route::post('/team-daily-checklist', [PlannerController::class, 'storeTeamDailyChecklistItem']);
+        Route::put('/team-daily-checklist/{item}', [PlannerController::class, 'updateTeamDailyChecklistItem']);
+        Route::delete('/team-daily-checklist/{item}', [PlannerController::class, 'destroyTeamDailyChecklistItem']);
         Route::post('/group-task-projects', [PlannerController::class, 'storeGroupTaskProject']);
         Route::put('/group-task-projects/{project}', [PlannerController::class, 'updateGroupTaskProject']);
         Route::delete('/group-task-projects/{project}', [PlannerController::class, 'destroyGroupTaskProject']);
