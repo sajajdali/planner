@@ -205,6 +205,11 @@ class AuthController extends Controller
         return ['user' => $this->userPayload($request->user())];
     }
 
+    public function csrfToken(Request $request)
+    {
+        return ['csrf_token' => $request->session()->token()];
+    }
+
     public function updateProfile(Request $request)
     {
         $data = $request->validate([
@@ -244,7 +249,10 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return response()->noContent();
+        // The frontend stays mounted after logout, so give it the new token.
+        // Otherwise every subsequent login/register request uses the token that
+        // was invalidated above and Laravel correctly rejects it with HTTP 419.
+        return ['csrf_token' => $request->session()->token()];
     }
 
     private function userPayload(User $user): array

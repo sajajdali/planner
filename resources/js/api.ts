@@ -1,5 +1,15 @@
 import axios from 'axios';
 
+function csrfToken() {
+    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
+
+export function setCsrfToken(token: string) {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
+    if (meta) meta.content = token;
+    api.defaults.headers.common['X-CSRF-TOKEN'] = token;
+}
+
 let lastActionElement: HTMLButtonElement | null = null;
 let lastActionAt = 0;
 
@@ -115,11 +125,12 @@ const api = axios.create({
     headers: {
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+        'X-CSRF-TOKEN': csrfToken(),
     },
 });
 
 api.interceptors.request.use((config) => {
+    config.headers['X-CSRF-TOKEN'] = csrfToken();
     const actionIsFresh = Date.now() - lastActionAt < 500;
     const button = beginButtonLoading(actionIsFresh ? lastActionElement : null);
     const isDeleteRequest = String(config.method ?? '').toLowerCase() === 'delete';
@@ -143,10 +154,27 @@ api.interceptors.response.use(
 
         return response;
     },
-    (error) => {
-        const config = error.config as typeof error.config & { requestButton?: HTMLButtonElement | null; deletingTarget?: HTMLElement | null } | undefined;
+    async (error) => {
+        const config = error.config as (typeof error.config & {
+            requestButton?: HTMLButtonElement | null;
+            deletingTarget?: HTMLElement | null;
+            csrfRetried?: boolean;
+        }) | undefined;
         endButtonLoading(config?.requestButton ?? null);
         endDeletingTarget(config?.deletingTarget ?? null);
+
+        if (error.response?.status === 419 && config && !config.csrfRetried) {
+            config.csrfRetried = true;
+
+            const { data } = await axios.get<{ csrf_token: string }>('/api/csrf-token', {
+                withCredentials: true,
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            setCsrfToken(data.csrf_token);
+            config.headers['X-CSRF-TOKEN'] = data.csrf_token;
+
+            return api.request(config);
+        }
 
         return Promise.reject(error);
     },

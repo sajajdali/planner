@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import api from '../api';
+import api, { setCsrfToken } from '../api';
 
 type User = {
     id: number;
@@ -99,7 +99,8 @@ export const useAuthStore = defineStore('auth', {
             }
         },
         async logout() {
-            await api.post('/logout');
+            const { data } = await api.post('/logout');
+            if (data.csrf_token) setCsrfToken(data.csrf_token);
             this.user = null;
         },
     },

@@ -9,6 +9,7 @@ Route::get('/{any?}', function () {
 })->where('any', '^(?!api).*$');
 
 Route::prefix('api')->group(function () {
+    Route::get('/csrf-token', [AuthController::class, 'csrfToken']);
     Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->name('login');
     Route::post('/register', [AuthController::class, 'register'])->middleware('guest');
     Route::post('/phone-code', [AuthController::class, 'sendPhoneCode'])->middleware('guest');
