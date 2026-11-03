@@ -19,6 +19,7 @@ const categories = ref<Category[]>([]);
 const reports = ref<Report[]>([]);
 const summary = ref<Summary>({ report_count: 0, total_minutes: 0, coverage_percent: 0, categories: [] });
 const showForm = ref(false);
+const editingReportId = ref<number | null>(null);
 const showCategoryForm = ref(false);
 const newCategory = reactive({ name: '', color: '#14B8A6' });
 const form = reactive({ start_time: '08:00', end_time: '12:00', items: [] as { category_id: number; description: string; duration_minutes: number }[] });
@@ -40,7 +41,10 @@ const formDuration = computed(() => {
 const activityMinutes = computed(() => form.items.reduce((sum, item) => sum + Number(item.duration_minutes || 0), 0));
 
 onMounted(load);
-watch(selectedDate, load);
+watch(selectedDate, () => {
+    closeReportForm();
+    void load();
+});
 
 function localDate(date: Date) {
     const year = date.getFullYear();
@@ -86,10 +90,49 @@ function moveDate(days: number) {
 }
 
 function setStartFromSlot(slot: Slot) {
+    editingReportId.value = null;
     form.start_time = slot.start_time;
     form.end_time = slot.end_time;
+    form.items = [];
+    addActivity();
     showForm.value = true;
     window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('.report-description')?.focus(), 50);
+}
+
+function toggleReportForm() {
+    if (showForm.value) {
+        closeReportForm();
+        return;
+    }
+
+    editingReportId.value = null;
+    form.items = [];
+    addActivity();
+    showForm.value = true;
+}
+
+function editReport(report: Report) {
+    editingReportId.value = report.id;
+    form.start_time = report.start_time;
+    form.end_time = report.end_time;
+    form.items = report.items.map((item) => ({
+        category_id: item.category.id,
+        description: item.description,
+        duration_minutes: item.duration_minutes,
+    }));
+    error.value = '';
+    showForm.value = true;
+    window.setTimeout(() => {
+        document.querySelector('.report-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.querySelector<HTMLTextAreaElement>('.report-description')?.focus();
+    }, 50);
+}
+
+function closeReportForm() {
+    editingReportId.value = null;
+    showForm.value = false;
+    form.items = [];
+    if (categories.value.length) addActivity();
 }
 
 async function load() {
@@ -120,19 +163,22 @@ async function saveReport() {
     saving.value = true;
     error.value = '';
     try {
-        await api.post('/four-hour-reports', {
+        const payload = {
             start_time: form.start_time,
             end_time: form.end_time,
             ends_next_day: form.end_time <= form.start_time,
             report_date: selectedDate.value,
             items: form.items.map((item) => ({ ...item, description: item.description.trim() })),
-        });
-        form.items = [];
-        addActivity();
-        showForm.value = false;
+        };
+        if (editingReportId.value) {
+            await api.put(`/four-hour-reports/${editingReportId.value}`, payload);
+        } else {
+            await api.post('/four-hour-reports', payload);
+        }
+        closeReportForm();
         await load();
     } catch (requestError: any) {
-        error.value = requestError?.response?.data?.message || 'ثبت گزارش انجام نشد.';
+        error.value = requestError?.response?.data?.message || (editingReportId.value ? 'ویرایش گزارش انجام نشد.' : 'ثبت گزارش انجام نشد.');
     } finally {
         saving.value = false;
     }
@@ -140,6 +186,7 @@ async function saveReport() {
 
 async function deleteReport(report: Report) {
     await api.delete(`/four-hour-reports/${report.id}`);
+    if (editingReportId.value === report.id) closeReportForm();
     await load();
 }
 
@@ -216,7 +263,7 @@ function removeActivity(index: number) {
                 </section>
 
                 <section class="action-row">
-                    <button type="button" class="add-report" @click="showForm = !showForm"><span>＋</span>{{ showForm ? 'بستن فرم' : 'ثبت گزارش جدید' }}</button>
+                    <button type="button" class="add-report" @click="toggleReportForm"><span>{{ showForm ? '×' : '＋' }}</span>{{ showForm ? 'بستن فرم' : 'ثبت گزارش جدید' }}</button>
                     <button type="button" class="add-category" @click="showCategoryForm = !showCategoryForm">＋ دسته‌بندی جدید</button>
                 </section>
 
@@ -227,7 +274,7 @@ function removeActivity(index: number) {
                 </section>
 
                 <section v-if="showForm" class="report-form" :style="{ '--accent': selectedCategory?.color || '#2563EB' }">
-                    <header><div><span>گزارش تازه</span><h2>در این بازه چه کار کردی؟</h2></div><strong>{{ durationText(formDuration) }}</strong></header>
+                    <header><div><span>{{ editingReportId ? 'ویرایش گزارش' : 'گزارش تازه' }}</span><h2>{{ editingReportId ? 'اطلاعات گزارش را اصلاح کن' : 'در این بازه چه کار کردی؟' }}</h2></div><strong>{{ durationText(formDuration) }}</strong></header>
                     <div class="time-fields"><label>از ساعت<input v-model="form.start_time" type="time" /></label><span>←</span><label>تا ساعت<input v-model="form.end_time" type="time" /></label></div>
                     <div class="activity-editor">
                         <article v-for="(item, index) in form.items" :key="index" :style="{ '--item-color': categories.find((category) => category.id === item.category_id)?.color || '#2563EB' }">
@@ -242,7 +289,7 @@ function removeActivity(index: number) {
                     </div>
                     <p v-if="formDuration > 240" class="form-warning">هر گزارش حداکثر می‌تواند ۴ ساعت باشد.</p>
                     <p v-if="activityMinutes > formDuration" class="form-warning">جمع زمان فعالیت‌ها از بازهٔ گزارش بیشتر شده است.</p>
-                    <footer><span>تاریخ: {{ persianDate }} · جمع فعالیت‌ها: {{ durationText(activityMinutes) }}</span><button type="button" :disabled="saving || form.items.some((item) => !item.description.trim()) || formDuration <= 0 || formDuration > 240 || activityMinutes > formDuration" @click="saveReport">{{ saving ? 'در حال ثبت...' : 'ثبت گزارش' }}</button></footer>
+                    <footer><span>تاریخ: {{ persianDate }} · جمع فعالیت‌ها: {{ durationText(activityMinutes) }}</span><div class="form-actions"><button v-if="editingReportId" type="button" class="cancel-edit" @click="closeReportForm">انصراف</button><button type="button" :disabled="saving || form.items.some((item) => !item.description.trim()) || formDuration <= 0 || formDuration > 240 || activityMinutes > formDuration" @click="saveReport">{{ saving ? 'در حال ذخیره...' : editingReportId ? 'ذخیره تغییرات' : 'ثبت گزارش' }}</button></div></footer>
                 </section>
 
                 <section class="timeline-section">
@@ -256,7 +303,7 @@ function removeActivity(index: number) {
                                     <div class="report-activities">
                                         <div v-for="item in report.items" :key="item.id" :style="{ '--item-color': item.category.color }"><span><i></i>{{ item.category.name }}</span><p>{{ item.description }}</p><small>{{ durationText(item.duration_minutes) }}</small></div>
                                     </div>
-                                    <button type="button" title="حذف گزارش" @click="deleteReport(report)">×</button>
+                                    <div class="report-actions"><button type="button" title="ویرایش گزارش" @click="editReport(report)">ویرایش</button><button type="button" title="حذف گزارش" @click="deleteReport(report)">×</button></div>
                                 </div>
                                 <button v-if="!slotReports(slot).length" type="button" class="empty-slot" @click="setStartFromSlot(slot)"><span>＋</span>برای این بازه گزارشی ثبت نشده؛ اضافه کن</button>
                             </div>
@@ -275,4 +322,6 @@ function removeActivity(index: number) {
 .hourly-shell{background-color:#0c211b;background-image:radial-gradient(circle at 10% 8%,rgba(184,243,74,.18),transparent 27%),radial-gradient(circle at 92% 18%,rgba(139,92,246,.18),transparent 29%),linear-gradient(145deg,#0b201a,#172c26 55%,#171f2c)}.hourly-page{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.4);background:linear-gradient(155deg,#fbfaf5 0%,#f3f5ed 52%,#f7f2fb 100%)}.hourly-page::before{content:"";position:absolute;top:-90px;left:-80px;width:230px;height:230px;border-radius:50%;background:rgba(184,243,74,.1);pointer-events:none}.page-head{position:relative;margin:-10px -10px 18px;padding:22px;border-radius:22px;background:linear-gradient(135deg,#203b32,#182c26 62%,#263b34);color:#fff;box-shadow:0 12px 28px rgba(30,55,47,.18)}.page-head::after{content:"";position:absolute;left:90px;top:0;width:150px;height:100%;background:linear-gradient(110deg,transparent,rgba(255,255,255,.045),transparent);transform:skewX(-18deg);pointer-events:none}.page-head .title-wrap h1{color:#fff}.page-head .title-wrap span{color:#b8f34a}.page-head .title-wrap p{color:#c9d5cf}.page-head .title-wrap>i{border-color:#b8f34a;background:#fff;color:#274138;box-shadow:4px 4px 0 #b8f34a}.date-navigator{border:0;box-shadow:0 8px 20px rgba(38,58,52,.08)}.rhythm-board{position:relative;margin-bottom:18px;padding:17px;border:1.5px solid #d9ded4;border-radius:21px;background:rgba(255,255,255,.8);box-shadow:0 10px 25px rgba(42,59,52,.07);backdrop-filter:blur(8px)}.rhythm-board>header{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:13px}.rhythm-board>header span{color:#6faa36;font-size:9px;font-weight:900}.rhythm-board>header h2{margin:1px 0 0;font-family:Lalezar,Vazirmatn,sans-serif;font-size:21px}.rhythm-board>header p{margin:0;padding:6px 9px;border-radius:8px;background:#eef3e9;color:#768078;font-size:9px}.rhythm-board>header b{color:#345129}.rhythm-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.rhythm-cards>button{position:relative;display:grid;min-width:0;min-height:112px;align-content:space-between;gap:5px;overflow:hidden;padding:12px;border:1.5px solid rgba(49,65,58,.13);border-radius:15px;background:var(--rhythm-bg);color:#314039;text-align:right;font:inherit;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}.rhythm-cards>button:hover{transform:translateY(-3px);box-shadow:0 9px 18px rgba(42,55,49,.12)}.rhythm-cards>button::after{content:"";position:absolute;left:-18px;top:-20px;width:75px;height:75px;border-radius:50%;background:var(--rhythm-orb);opacity:.28}.rhythm-1{--rhythm-bg:linear-gradient(145deg,#fff9da,#fffdf1);--rhythm-orb:#facc15}.rhythm-2{--rhythm-bg:linear-gradient(145deg,#e9f8ef,#f6fff9);--rhythm-orb:#22c55e}.rhythm-3{--rhythm-bg:linear-gradient(145deg,#e9f3ff,#f7fbff);--rhythm-orb:#3b82f6}.rhythm-4{--rhythm-bg:linear-gradient(145deg,#f1eaff,#fcf9ff);--rhythm-orb:#8b5cf6}.rhythm-cards>button.complete{border-color:#6faa36;box-shadow:inset 0 0 0 1px rgba(111,170,54,.18)}.rhythm-cards>button>i{position:absolute;left:12px;top:10px;z-index:1;color:#526259;font-size:23px;font-style:normal}.rhythm-number{display:grid;width:23px;height:23px;place-items:center;border-radius:8px;background:#263a34;color:#fff;font-size:9px;font-weight:900}.rhythm-cards strong{position:relative;z-index:1;font-size:12px;direction:ltr;text-align:right}.rhythm-cards strong small{color:#8a958e;font-size:8px}.rhythm-cards em{position:relative;z-index:1;color:#748078;font-size:8.5px;font-style:normal;font-weight:900}.rhythm-cards .complete em{color:#528a25}.stats-grid article{border:0;box-shadow:0 8px 20px rgba(41,57,50,.07)}.stat-main{background:linear-gradient(135deg,#263a34,#315348)!important;color:#fff}.stat-main small,.stat-main span{color:#c8d7d0!important}.stat-main .coverage-ring{background:radial-gradient(circle,#29483e 58%,transparent 60%),conic-gradient(#b8f34a var(--p),rgba(255,255,255,.15) 0)}.category-chart{background:linear-gradient(145deg,#fff,#fbfaf5)!important}.action-row{justify-content:flex-end}.add-report{border-color:#263a34;background:linear-gradient(135deg,#b8f34a,#9ede32);box-shadow:3px 3px 0 #263a34}.add-category{border-color:#aeb9b2!important;background:rgba(255,255,255,.8)}.report-form{border-width:1.5px;box-shadow:0 16px 35px color-mix(in srgb,var(--accent) 14%,transparent)}.activity-editor>article{box-shadow:0 4px 12px rgba(44,58,51,.04)}.timeline-section{border:0;box-shadow:0 10px 28px rgba(40,55,49,.08)}.report-card{box-shadow:0 4px 12px rgba(40,55,49,.05)}.empty-slot{transition:.16s}.empty-slot:hover{background:#f3faeb;transform:translateX(-2px)}
 @media(max-width:760px){.hourly-shell{padding:12px 8px 60px}.hourly-page{padding:16px 12px;border-radius:18px}.page-head{align-items:flex-start}.title-wrap>i{width:43px;height:43px;border-radius:14px;font-size:25px}.title-wrap h1{font-size:25px}.title-wrap p{display:none}.date-navigator>div{min-width:0;flex:1}.stats-grid{grid-template-columns:1fr}.category-chart{min-height:120px}.action-row{display:grid;grid-template-columns:1fr 1fr}.category-form{flex-wrap:wrap}.category-form>input{min-width:170px}.report-form footer{align-items:stretch;flex-direction:column;gap:9px}.time-slot{grid-template-columns:90px 1fr}.slot-time{padding-left:14px}.slot-time strong{font-size:8.5px}.report-card header{align-items:flex-start;flex-wrap:wrap}.report-card header b{margin-right:0}.report-card p{font-size:11px}.timeline-section{padding:13px 9px}.date-navigator .today-btn{position:static}.chart-legend{gap:8px}.hourly-page :deep(.shared-menu-button){width:38px;height:38px}}
 @media(max-width:760px){.page-head{margin:-5px -3px 14px;padding:16px 13px}.rhythm-board{padding:13px}.rhythm-board>header{align-items:flex-start;flex-direction:column}.rhythm-cards{grid-template-columns:repeat(2,1fr)}.rhythm-cards>button{min-height:100px}.stat-main{min-height:120px}}
+.form-actions,.report-actions{display:flex;align-items:center;gap:7px}.report-form footer .cancel-edit{border:1.5px solid #cbd2cd;background:#fff;color:#69756e}.report-card{padding-left:92px}.report-actions{position:absolute;top:9px;left:9px}.report-actions button{height:25px;border:0;border-radius:7px;padding:0 8px;background:#fff;color:#6f7b74;font:inherit;font-size:8.5px;font-weight:900;cursor:pointer}.report-actions button:last-child{width:25px;padding:0;color:#b45353;font-size:15px}.report-actions button:hover{background:#edf3e9;color:#315b3c}
+@media(max-width:760px){.form-actions{width:100%}.form-actions button{flex:1}.report-card{padding-left:74px}.report-actions button:first-child{width:25px;overflow:hidden;padding:0;font-size:0}.report-actions button:first-child::after{content:'✎';font-size:13px}}
 </style>

@@ -39,6 +39,7 @@ Route::prefix('api')->group(function () {
         Route::get('/four-hour-reports', [PlannerController::class, 'fourHourReports']);
         Route::post('/four-hour-report-categories', [PlannerController::class, 'storeFourHourReportCategory']);
         Route::post('/four-hour-reports', [PlannerController::class, 'storeFourHourReport']);
+        Route::put('/four-hour-reports/{report}', [PlannerController::class, 'updateFourHourReport']);
         Route::delete('/four-hour-reports/{report}', [PlannerController::class, 'destroyFourHourReport']);
         Route::post('/team-daily-checklist', [PlannerController::class, 'storeTeamDailyChecklistItem']);
         Route::put('/team-daily-checklist/{item}', [PlannerController::class, 'updateTeamDailyChecklistItem']);

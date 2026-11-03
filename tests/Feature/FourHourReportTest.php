@@ -78,6 +78,47 @@ class FourHourReportTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_user_can_edit_their_report_and_its_activities(): void
+    {
+        $user = User::factory()->create();
+        $categories = $this->actingAs($user)->getJson('/api/four-hour-reports?date=2026-11-02')->json('categories');
+        $workCategory = collect($categories)->firstWhere('name', 'کاری');
+        $healthCategory = collect($categories)->firstWhere('name', 'سلامتی');
+
+        $reportId = $this->actingAs($user)->postJson('/api/four-hour-reports', [
+            'report_date' => '2026-11-02',
+            'start_time' => '08:00',
+            'end_time' => '10:00',
+            'items' => [
+                ['category_id' => $workCategory['id'], 'description' => 'نسخه قدیمی', 'duration_minutes' => 60],
+            ],
+        ])->assertOk()->json('id');
+
+        $this->actingAs($user)->putJson("/api/four-hour-reports/{$reportId}", [
+            'report_date' => '2026-11-02',
+            'start_time' => '08:30',
+            'end_time' => '11:30',
+            'items' => [
+                ['category_id' => $workCategory['id'], 'description' => 'نسخه ویرایش‌شده', 'duration_minutes' => 120],
+                ['category_id' => $healthCategory['id'], 'description' => 'پیاده‌روی', 'duration_minutes' => 30],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('start_time', '08:30')
+            ->assertJsonPath('duration_minutes', 180)
+            ->assertJsonCount(2, 'items')
+            ->assertJsonPath('items.0.description', 'نسخه ویرایش‌شده')
+            ->assertJsonPath('items.1.category.name', 'سلامتی');
+
+        $this->assertDatabaseMissing('four_hour_report_items', ['description' => 'نسخه قدیمی']);
+        $this->actingAs($user)->getJson('/api/four-hour-reports?date=2026-11-02')
+            ->assertJsonPath('summary.total_minutes', 180)
+            ->assertJsonPath('summary.categories.0.minutes', 30)
+            ->assertJsonPath('summary.categories.1.minutes', 120);
+
+        $otherUser = User::factory()->create();
+        $this->actingAs($otherUser)->putJson("/api/four-hour-reports/{$reportId}", [])->assertNotFound();
+    }
+
     public function test_user_can_add_a_personal_category(): void
     {
         $user = User::factory()->create();

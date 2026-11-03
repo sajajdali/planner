@@ -1379,6 +1379,72 @@ class PlannerController extends Controller
         return $this->fourHourReportPayload($report);
     }
 
+    public function updateFourHourReport(Request $request, FourHourReport $report)
+    {
+        abort_unless($report->user_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'report_date' => ['required', 'date_format:Y-m-d'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i'],
+            'ends_next_day' => ['nullable', 'boolean'],
+            'items' => ['required', 'array', 'min:1', 'max:20'],
+            'items.*.category_id' => ['required', 'integer'],
+            'items.*.description' => ['required', 'string', 'max:1000'],
+            'items.*.duration_minutes' => ['required', 'integer', 'min:1', 'max:240'],
+        ]);
+        $userId = $request->user()->id;
+        $categoryIds = collect($data['items'])->pluck('category_id')->unique();
+        $categories = FourHourReportCategory::query()->where('user_id', $userId)->whereIn('id', $categoryIds)->get()->keyBy('id');
+        abort_unless($categories->count() === $categoryIds->count(), 422, 'یکی از دسته‌بندی‌ها معتبر نیست.');
+        $endsNextDay = (bool) ($data['ends_next_day'] ?? ($data['end_time'] <= $data['start_time']));
+        $start = Carbon::createFromFormat('H:i', $data['start_time']);
+        $end = Carbon::createFromFormat('H:i', $data['end_time']);
+        if ($endsNextDay) $end->addDay();
+        $durationMinutes = (int) $start->diffInMinutes($end);
+        abort_if($durationMinutes > 240, 422, 'هر گزارش می‌تواند حداکثر چهار ساعت باشد.');
+        abort_if(collect($data['items'])->sum('duration_minutes') > $durationMinutes, 422, 'جمع زمان فعالیت‌ها از بازه گزارش بیشتر است.');
+
+        $newStart = $this->clockMinutes($data['start_time']);
+        $newEnd = $this->clockMinutes($data['end_time']) + ($endsNextDay ? 1440 : 0);
+        $overlaps = FourHourReport::query()->where('user_id', $userId)->whereDate('report_date', $data['report_date'])
+            ->where('id', '!=', $report->id)->get()
+            ->contains(function (FourHourReport $existingReport) use ($newStart, $newEnd) {
+                $existingStart = $this->clockMinutes($existingReport->start_time);
+                $existingEnd = $this->clockMinutes($existingReport->end_time) + ($existingReport->ends_next_day ? 1440 : 0);
+
+                return $existingStart < $newEnd && $existingEnd > $newStart;
+            });
+        abort_if($overlaps, 422, 'این بازه زمانی با یک گزارش دیگر هم‌پوشانی دارد.');
+
+        $report = DB::transaction(function () use ($data, $report, $durationMinutes, $endsNextDay) {
+            $firstItem = $data['items'][0];
+            $report->update([
+                'four_hour_report_category_id' => $firstItem['category_id'],
+                'report_date' => $data['report_date'],
+                'start_time' => $data['start_time'],
+                'end_time' => $data['end_time'],
+                'ends_next_day' => $endsNextDay,
+                'duration_minutes' => $durationMinutes,
+                'description' => collect($data['items'])->pluck('description')->map(fn ($value) => trim($value))->join("\n"),
+            ]);
+
+            $report->items()->delete();
+            foreach ($data['items'] as $index => $item) {
+                $report->items()->create([
+                    'four_hour_report_category_id' => $item['category_id'],
+                    'description' => trim($item['description']),
+                    'duration_minutes' => $item['duration_minutes'],
+                    'sort_order' => $index + 1,
+                ]);
+            }
+
+            return $report->fresh(['category', 'items.category']);
+        });
+
+        return $this->fourHourReportPayload($report);
+    }
+
     public function destroyFourHourReport(Request $request, FourHourReport $report)
     {
         abort_unless($report->user_id === $request->user()->id, 404);
