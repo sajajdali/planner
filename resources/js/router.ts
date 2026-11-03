@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AuthPage from './views/AuthPage.vue';
 import DailyPlannerPage from './views/DailyPlannerPage.vue';
 import FinanceManagementPage from './views/FinanceManagementPage.vue';
+import FourHourReportsPage from './views/FourHourReportsPage.vue';
 import GoalsPage from './views/GoalsPage.vue';
 import GroupTasksPage from './views/GroupTasksPage.vue';
 import LandingPage from './views/LandingPage.vue';
@@ -21,6 +22,7 @@ export default createRouter({
         { path: '/app', component: DailyPlannerPage },
         { path: '/goals', component: GoalsPage },
         { path: '/group-tasks', component: GroupTasksPage },
+        { path: '/four-hour-reports', component: FourHourReportsPage },
         { path: '/finance', component: FinanceManagementPage },
         { path: '/notes', component: NotesLibraryPage },
         { path: '/s/:token', component: SharedNotePage },

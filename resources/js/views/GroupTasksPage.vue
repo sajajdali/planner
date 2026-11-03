@@ -21,6 +21,8 @@ type GroupTaskProject = {
 type PeriodType = 'weekly' | 'monthly' | 'general';
 type GroupOption = { id: number; category_id: number; name: string; color: string; soft_color: string; already_added: boolean };
 type Section = { id: number; name: string; color: string; soft_color: string; groups: GroupOption[]; projects: GroupTaskProject[] };
+type GroupTaskArchive = { id: number; name: string; task_count: number; created_at: string };
+type ViewedGroupTaskArchive = GroupTaskArchive & { sections: Section[] };
 const loading = ref(true);
 const router = useRouter();
 const error = ref('');
@@ -39,6 +41,15 @@ const editTaskDraft = ref('');
 const toast = ref('');
 const tableFilter = ref<'all' | 'weekly' | 'monthly'>('all');
 const overviewOpen = ref(false);
+const newPlanStep = ref<0 | 1 | 2 | 3>(0);
+const newPlanConfirmation = ref('');
+const newPlanArchiveName = ref('');
+const resettingPlan = ref(false);
+const newPlanConfirmationPhrase = 'حذف برنامه قبلی';
+const groupTaskArchives = ref<GroupTaskArchive[]>([]);
+const archiveBrowserOpen = ref(false);
+const archiveLoading = ref(false);
+const viewedArchive = ref<ViewedGroupTaskArchive | null>(null);
 const tilts = ['rotate(-0.4deg)', 'rotate(0.3deg)', 'rotate(-0.2deg)'];
 const periods: { key: PeriodType; label: string; hint: string }[] = [
     { key: 'general', label: 'کلی', hint: 'بک‌لاگ و ایده‌های آزاد' },
@@ -46,14 +57,16 @@ const periods: { key: PeriodType; label: string; hint: string }[] = [
     { key: 'weekly', label: 'هفتگی', hint: 'کارهای قابل انجام در این هفته' },
 ];
 
-const hasAnyProject = computed(() => sections.value.some((section) => section.projects.length));
-const tableTasks = computed(() => sections.value.flatMap((section) => section.projects.flatMap((project) => project.items.map((item) => ({
+const displayedSections = computed(() => viewedArchive.value?.sections ?? sections.value);
+const hasAnyProject = computed(() => displayedSections.value.some((section) => section.projects.length));
+const tableTasks = computed(() => displayedSections.value.flatMap((section) => section.projects.flatMap((project) => project.items.map((item) => ({
     item,
     project,
     section,
 })))).filter(({ item }) => tableFilter.value === 'all' || item.period_type === tableFilter.value));
-const filterCount = (filter: 'all' | 'weekly' | 'monthly') => sections.value.reduce((count, section) => count + section.projects.reduce((projectCount, project) => projectCount + project.items.filter((item) => filter === 'all' || item.period_type === filter).length, 0), 0);
+const filterCount = (filter: 'all' | 'weekly' | 'monthly') => displayedSections.value.reduce((count, section) => count + section.projects.reduce((projectCount, project) => projectCount + project.items.filter((item) => filter === 'all' || item.period_type === filter).length, 0), 0);
 const tableTitle = computed(() => ({ all: 'همه کارهای گروهی', weekly: 'کارهای این هفته', monthly: 'کارهای این ماه' })[tableFilter.value]);
+const allGroupTaskCount = computed(() => sections.value.reduce((count, section) => count + section.projects.reduce((projectCount, project) => projectCount + project.items.length, 0), 0));
 
 onMounted(load);
 
@@ -68,6 +81,7 @@ async function load() {
         const { data } = await api.get('/group-tasks');
         sections.value = data.sections ?? [];
         dailyChecklist.value = data.dailyChecklist ?? { date: '', items: [], archives: [] };
+        groupTaskArchives.value = data.archives ?? [];
     } catch {
         error.value = 'کارهای گروهی فعلاً بارگذاری نشدند.';
     } finally {
@@ -235,6 +249,57 @@ async function deleteTask(project: GroupTaskProject, item: GroupTaskItem) {
     });
 }
 
+function closeNewPlanDialog() {
+    if (resettingPlan.value) return;
+    newPlanStep.value = 0;
+    newPlanConfirmation.value = '';
+    newPlanArchiveName.value = '';
+}
+
+async function resetGroupTasks() {
+    if (newPlanConfirmation.value.trim() !== newPlanConfirmationPhrase || resettingPlan.value) return;
+    resettingPlan.value = true;
+    try {
+        const { data } = await api.post('/group-tasks/reset', {
+            confirmation: newPlanConfirmation.value.trim(),
+            archive_name: newPlanArchiveName.value.trim() || null,
+        });
+        sections.value = sections.value.map((section) => ({
+            ...section,
+            projects: section.projects.map((project) => ({ ...project, items: [], done_count: 0, total_count: 0 })),
+        }));
+        const deletedCount = data.deleted_count ?? allGroupTaskCount.value;
+        closeNewPlanDialog();
+        newPlanStep.value = 0;
+        newPlanConfirmation.value = '';
+        newPlanArchiveName.value = '';
+        if (data.archive) groupTaskArchives.value = [data.archive, ...groupTaskArchives.value];
+        toast.value = data.archive
+            ? `برنامه آرشیو شد و برنامه جدید با حذف ${fa(deletedCount)} کار آماده شد.`
+            : `برنامه جدید آماده شد؛ ${fa(deletedCount)} کار قبلی پاک شد.`;
+        window.setTimeout(() => toast.value = '', 3500);
+    } finally {
+        resettingPlan.value = false;
+    }
+}
+
+function archiveDate(date: string) {
+    return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium' }).format(new Date(date));
+}
+
+async function viewGroupTaskArchive(archive: GroupTaskArchive) {
+    archiveLoading.value = true;
+    try {
+        const { data } = await api.get(`/group-task-archives/${archive.id}`);
+        viewedArchive.value = data;
+        archiveBrowserOpen.value = false;
+        overviewOpen.value = true;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+        archiveLoading.value = false;
+    }
+}
+
 async function dropTask(project: GroupTaskProject, target: GroupTaskItem) {
     const source = draggedItem.value;
     draggedItem.value = null;
@@ -279,8 +344,8 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
 </script>
 
 <template>
-    <div class="team-tasks-shell" dir="rtl">
-        <main class="team-paper">
+    <div class="team-tasks-shell" :class="{ 'archive-mode': viewedArchive }" dir="rtl">
+        <main class="team-paper" :class="{ 'archive-view': viewedArchive }">
             <i class="team-tape yellow"></i>
             <i class="team-tape cyan"></i>
 
@@ -289,13 +354,29 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
                     <i>گ</i>
                     <h1>کارهای گروهی</h1>
                 </div>
-                <AppMenu />
+                <div class="team-head-actions">
+                    <button type="button" class="archive-browser-btn" title="برنامه‌های آرشیوشده" @click="archiveBrowserOpen = true">
+                        <span>▣</span>
+                        آرشیو
+                        <b v-if="groupTaskArchives.length">{{ fa(groupTaskArchives.length) }}</b>
+                    </button>
+                    <button v-if="!viewedArchive" type="button" class="new-plan-btn" @click="newPlanStep = 1">
+                        <span>＋</span>
+                        برنامه جدید
+                    </button>
+                    <AppMenu />
+                </div>
             </header>
+
+            <div v-if="viewedArchive" class="archive-view-banner">
+                <div><span>حالت آرشیو</span><strong>در حال مشاهدهٔ برنامهٔ آرشیوشده «{{ viewedArchive.name }}» هستید.</strong></div>
+                <button type="button" @click="viewedArchive = null">× بستن و بازگشت به برنامه جاری</button>
+            </div>
 
             <div v-if="loading" class="team-state">در حال بارگذاری کارهای گروهی...</div>
             <div v-else-if="error" class="team-state error">{{ error }}</div>
             <template v-else>
-                <section class="daily-checklist" aria-label="چک‌لیست روزانه تیم">
+                <section v-if="!viewedArchive" class="daily-checklist" aria-label="چک‌لیست روزانه تیم">
                     <header class="daily-checklist-head"><div><span>امروز</span><h2>چک‌لیست روزانه‌ی تیم</h2><p>کارها را کوتاه بنویس؛ فردا خودکار به آرشیو می‌روند.</p></div><strong v-if="dailyChecklist.items.length">{{ fa(dailyChecklist.items.filter((item) => item.is_done).length) }} / {{ fa(dailyChecklist.items.length) }}</strong></header>
                     <div class="daily-checklist-items"><div v-for="item in dailyChecklist.items" :key="item.id" class="daily-checklist-item" :class="{ dragging: draggedDailyChecklistItemId === item.id }" draggable="true" @dragstart="draggedDailyChecklistItemId = item.id" @dragover.prevent @drop="dropDailyChecklistItem(item)" @dragend="draggedDailyChecklistItemId = null"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h8M8 12h8M8 18h8" /></svg><button type="button" class="daily-check" :class="{ done: item.is_done }" @click="toggleDailyChecklistItem(item)">✓</button><span :class="{ done: item.is_done }">{{ item.title }}</span><button type="button" class="daily-delete" title="حذف" @click="deleteDailyChecklistItem(item)">×</button></div><p v-if="!dailyChecklist.items.length" class="daily-empty">اولین کار کوتاه امروز را بنویس.</p></div>
                     <div class="daily-add-row"><input v-model="dailyChecklistDraft" placeholder="مثلاً: پاسخ به پیام‌های مشتری" @keydown.enter.exact.prevent="addDailyChecklistItem" /><button type="button" @click="addDailyChecklistItem">افزودن</button></div>
@@ -328,7 +409,7 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
                             <thead><tr><th>کار</th><th>پروژه</th><th>دسته‌بندی</th><th>وضعیت</th></tr></thead>
                             <tbody>
                                 <tr v-for="({ item, project, section }) in tableTasks" :key="`overview-${item.id}`">
-                                    <td class="overview-task"><button type="button" :class="{ done: item.is_done }" :style="{ '--g': project.color, '--soft': project.soft_color }" :aria-label="item.is_done ? 'علامت‌گذاری به‌عنوان انجام‌نشده' : 'علامت‌گذاری به‌عنوان انجام‌شده'" @click="toggleTask(project, item)"></button><span :class="{ done: item.is_done }">{{ item.title }}</span></td>
+                                    <td class="overview-task"><button type="button" :disabled="!!viewedArchive" :class="{ done: item.is_done }" :style="{ '--g': project.color, '--soft': project.soft_color }" :aria-label="item.is_done ? 'علامت‌گذاری به‌عنوان انجام‌نشده' : 'علامت‌گذاری به‌عنوان انجام‌شده'" @click="toggleTask(project, item)"></button><span :class="{ done: item.is_done }">{{ item.title }}</span></td>
                                     <td><i class="project-dot" :style="{ background: project.color }"></i>{{ project.name }}</td>
                                     <td>{{ section.name }}</td>
                                     <td><em :class="item.is_done ? 'is-done' : 'is-pending'">{{ item.is_done ? 'انجام شده' : 'در انتظار' }}</em></td>
@@ -339,12 +420,12 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
                         </div>
                     </div>
                 </section>
-                <section v-for="section in sections" :key="section.id" class="team-section" :style="{ '--c': section.color }">
+                <section v-for="section in displayedSections" :key="section.id" class="team-section" :style="{ '--c': section.color }">
                     <header>
                         <span></span>
                         <h2>{{ section.name }}</h2>
                     </header>
-                    <button class="add-project-btn section-add" type="button" @click="openAddProject(section)">＋ اضافه کردن پروژه</button>
+                    <button v-if="!viewedArchive" class="add-project-btn section-add" type="button" @click="openAddProject(section)">＋ اضافه کردن پروژه</button>
                     <div class="project-list">
                         <article
                             v-for="(project, index) in section.projects"
@@ -356,7 +437,7 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
                                 <strong>{{ project.name }}</strong>
                                 <div>
                                     <span v-if="project.total_count">{{ fa(project.done_count) }} از {{ fa(project.total_count) }} انجام شد</span>
-                                    <button type="button" @click="deleteProjectTarget = project">
+                                    <button v-if="!viewedArchive" type="button" @click="deleteProjectTarget = project">
                                         <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v13a1 1 0 01-1 1H8a1 1 0 01-1-1V7h10z M10 11v6M14 11v6"></path></svg>
                                     </button>
                                 </div>
@@ -428,7 +509,7 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
                                 </section>
                             </div>
 
-                            <div class="new-task-row">
+                            <div v-if="!viewedArchive" class="new-task-row">
                                 <div class="new-task-period">
                                     <select :value="draftPeriod(project)" title="جای افزودن کار" @change="updateDraftPeriod(project, $event)">
                                         <option v-for="period in periods" :key="period.key" :value="period.key">{{ period.label }}</option>
@@ -491,6 +572,80 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
                 </footer>
             </section>
         </div>
+
+        <div v-if="archiveBrowserOpen" class="team-modal-backdrop">
+            <section class="team-modal archive-browser-modal" role="dialog" aria-modal="true" aria-labelledby="archive-browser-title">
+                <h2 id="archive-browser-title">برنامه‌های آرشیوشده</h2>
+                <p>برای مشاهدهٔ نسخهٔ ذخیره‌شده روی یکی از برنامه‌ها بزن.</p>
+                <div v-if="groupTaskArchives.length" class="program-archive-list">
+                    <button v-for="archive in groupTaskArchives" :key="archive.id" type="button" :disabled="archiveLoading" @click="viewGroupTaskArchive(archive)">
+                        <i>▣</i>
+                        <span><strong>{{ archive.name }}</strong><small>{{ archiveDate(archive.created_at) }} · {{ fa(archive.task_count) }} کار</small></span>
+                        <b>‹</b>
+                    </button>
+                </div>
+                <div v-else class="modal-empty rich"><i>▣</i><strong>هنوز برنامه‌ای آرشیو نشده است.</strong><span>هنگام شروع برنامهٔ جدید می‌توانی برنامهٔ فعلی را اینجا نگه داری.</span></div>
+                <footer><button type="button" :disabled="archiveLoading" @click="archiveBrowserOpen = false">بستن</button></footer>
+            </section>
+        </div>
+
+        <div v-if="newPlanStep" class="team-modal-backdrop">
+            <section class="team-modal confirm new-plan-modal" role="dialog" aria-modal="true" aria-labelledby="new-plan-title">
+                <template v-if="newPlanStep === 1">
+                    <span class="confirm-step">شروع برنامهٔ جدید</span>
+                    <h2 id="new-plan-title">برنامهٔ فعلی آرشیو شود؟</h2>
+                    <p>
+                        برنامهٔ فعلی {{ fa(allGroupTaskCount) }} کار دارد. می‌توانی قبل از خالی‌کردن صفحه، یک نسخهٔ کامل از آن در آرشیو نگه داری.
+                    </p>
+                    <div class="archive-choice-note">پیشنهاد می‌کنیم برنامه را آرشیو کنی تا بعداً بتوانی آن را دقیقاً با همین وضعیت ببینی.</div>
+                    <footer>
+                        <button type="button" @click="closeNewPlanDialog">انصراف</button>
+                        <button type="button" class="danger ghost-danger" @click="newPlanArchiveName = ''; newPlanStep = 3">نه، بدون آرشیو</button>
+                        <button type="button" class="archive-action" @click="newPlanStep = 2">بله، آرشیو شود</button>
+                    </footer>
+                </template>
+                <template v-else-if="newPlanStep === 2">
+                    <span class="confirm-step archive-step">ذخیره در آرشیو</span>
+                    <h2 id="new-plan-title">نام این برنامه چیست؟</h2>
+                    <p>یک نام مشخص بنویس تا بعداً راحت آن را در آرشیو پیدا کنی.</p>
+                    <input
+                        v-model="newPlanArchiveName"
+                        class="confirmation-input"
+                        maxlength="100"
+                        autofocus
+                        placeholder="مثلاً: برنامه هفته دوم آبان"
+                        @keydown.enter.exact.prevent="newPlanArchiveName.trim() && (newPlanStep = 3)"
+                    />
+                    <footer>
+                        <button type="button" @click="newPlanStep = 1; newPlanArchiveName = ''">بازگشت</button>
+                        <button type="button" class="archive-action" :disabled="!newPlanArchiveName.trim()" @click="newPlanStep = 3">ادامه</button>
+                    </footer>
+                </template>
+                <template v-else>
+                    <span class="confirm-step">تأیید دوم از ۲</span>
+                    <h2 id="new-plan-title">کاملاً مطمئن هستی؟</h2>
+                    <p v-if="newPlanArchiveName">برنامه با نام «{{ newPlanArchiveName }}» آرشیو می‌شود و سپس صفحه برای برنامهٔ جدید خالی خواهد شد.</p>
+                    <p v-else>این برنامه بدون آرشیو پاک می‌شود. برای تأیید نهایی، عبارت زیر را دقیقاً داخل کادر بنویس:</p>
+                    <code class="confirmation-phrase">{{ newPlanConfirmationPhrase }}</code>
+                    <input
+                        v-model="newPlanConfirmation"
+                        class="confirmation-input"
+                        autocomplete="off"
+                        :placeholder="newPlanConfirmationPhrase"
+                        @keydown.enter.exact.prevent="resetGroupTasks"
+                    />
+                    <footer>
+                        <button type="button" :disabled="resettingPlan" @click="newPlanStep = newPlanArchiveName ? 2 : 1; newPlanConfirmation = ''">بازگشت</button>
+                        <button
+                            type="button"
+                            class="danger"
+                            :disabled="newPlanConfirmation.trim() !== newPlanConfirmationPhrase || resettingPlan"
+                            @click="resetGroupTasks"
+                        >{{ resettingPlan ? 'در حال آماده‌سازی...' : (newPlanArchiveName ? 'آرشیو و شروع برنامه جدید' : 'پاک کردن و شروع برنامه جدید') }}</button>
+                    </footer>
+                </template>
+            </section>
+        </div>
     </div>
 </template>
 
@@ -505,4 +660,8 @@ async function dropTaskToPeriod(project: GroupTaskProject, period: PeriodType) {
 @media(max-width:960px){.task-period-board{grid-template-columns:1fr;grid-template-areas:"general" "monthly" "weekly"}}
 @media(max-width:720px){.team-tasks-shell{padding:18px 10px 70px}.team-paper{padding:22px 14px;transform:none}.team-head{align-items:flex-start}.group-task-overview{padding:5px;margin-bottom:24px;border-radius:15px}.overview-toggle{gap:8px;padding:10px}.overview-toggle h2{font-size:20px}.overview-toggle p{max-width:200px;line-height:1.7}.overview-toggle-end{gap:5px}.overview-toggle-end strong{padding:6px 7px}.overview-filters{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.overview-filters button{justify-content:center;padding:0 5px;font-size:10px;gap:3px}.overview-filters b{min-width:17px;height:17px;padding:0 2px}.project-card{padding:13px}.project-card>header{display:grid;grid-template-columns:minmax(0,1fr) auto 24px;align-items:start;gap:8px;margin-bottom:10px}.project-card>header strong{grid-column:1;min-width:0;line-height:1.55;font-size:16px}.project-card>header div{display:contents}.project-card>header div span{grid-column:2;justify-self:start;align-self:center;white-space:normal;font-size:10.5px}.project-card>header div button{grid-column:3;grid-row:1;justify-self:start;align-self:start;width:24px;height:24px;border:0;background:transparent;color:#c7b896;box-shadow:none;padding:0}.team-modal-backdrop{padding:12px;align-items:start;overflow:auto}.team-modal{margin:12px 0}.todo-row{grid-template-columns:14px 26px minmax(0,1fr) 22px 22px;gap:6px;padding:8px 0}.new-task-row{display:flex;align-items:stretch}.new-task-period select{width:58px;height:34px;font-size:10px}.new-task-row input{min-width:0}.team-toast{right:12px;left:12px;text-align:center}}
 .daily-checklist-item{cursor:grab}.daily-checklist-item.dragging{opacity:.45}.daily-checklist-item>svg{width:13px;height:13px;flex:none;fill:none;stroke:#c7b896;stroke-width:2;stroke-linecap:round}
+.team-head-actions{display:flex;align-items:center;gap:10px}.new-plan-btn{display:flex;align-items:center;gap:6px;height:38px;padding:0 13px;border:2px solid #3a2e1f;border-radius:11px;background:#ffd93d;color:#3a2e1f;box-shadow:2px 2px 0 #3a2e1f;font:inherit;font-size:11.5px;font-weight:900;cursor:pointer}.new-plan-btn span{font-size:18px;line-height:1}.new-plan-btn:hover{background:#ffe56c}.confirm-step{display:inline-block;margin-bottom:7px;padding:4px 8px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:9.5px;font-weight:900}.new-plan-modal p{line-height:2}.new-plan-warning{margin:13px 0;padding:10px 12px;border:1.5px dashed #dc2626;border-radius:10px;background:#fff1f2;color:#b91c1c;font-size:11px;font-weight:900}.confirmation-phrase{display:block;margin:8px 0;padding:10px 12px;border-radius:9px;background:#f1e8d5;color:#3a2e1f;text-align:center;font-family:Vazirmatn,sans-serif;font-size:13px;font-weight:900;user-select:all}.confirmation-input{width:100%;height:40px;margin-bottom:16px;padding:0 11px;border:2px solid #d7c9a6;border-radius:10px;background:#fff;font:inherit;font-size:12px;outline:0}.confirmation-input:focus{border-color:#dc2626}.team-modal footer button:disabled{opacity:.45;cursor:not-allowed}.new-plan-modal footer{flex-wrap:wrap}.new-plan-modal footer .danger{font-weight:900}
+.archive-browser-btn{position:relative;display:flex;align-items:center;gap:6px;height:38px;padding:0 11px;border:1.5px solid #9b8ab8;border-radius:11px;background:#f5f0ff;color:#604780;font:inherit;font-size:11px;font-weight:900;cursor:pointer}.archive-browser-btn>span{font-size:17px}.archive-browser-btn>b{display:grid;min-width:18px;height:18px;padding:0 4px;place-items:center;border-radius:6px;background:#72549a;color:#fff;font-size:9px}.archive-mode{background:#162b35;background-image:radial-gradient(circle at 20% 20%,#234451 0%,#10232b 70%)}.team-paper.archive-view{background-color:#eef8f7;background-image:radial-gradient(#cce3df 1px,transparent 1px);box-shadow:0 30px 60px rgba(0,0,0,.5),0 0 0 3px #67a9a0}.archive-view-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:-4px 0 22px;padding:13px 15px;border:2px solid #397c74;border-radius:14px;background:#d9f2ee;color:#245b55}.archive-view-banner div{display:grid;gap:2px}.archive-view-banner span{font-size:9px;font-weight:900;color:#397c74}.archive-view-banner strong{font-size:12.5px}.archive-view-banner button{padding:8px 11px;border:1.5px solid #397c74;border-radius:9px;background:#fff;color:#397c74;font:inherit;font-size:10px;font-weight:900;cursor:pointer}.archive-view .team-section{pointer-events:none}.archive-view .team-section .edit-task-btn,.archive-view .team-section .edit-save,.archive-view .team-section .edit-cancel,.archive-view .team-section .delete-task{display:none}.archive-view .todo-row{grid-template-columns:14px 24px minmax(0,1fr)}.archive-view .todo-row>button{cursor:default}.archive-choice-note{margin:13px 0;padding:10px 12px;border:1.5px dashed #72549a;border-radius:10px;background:#f5f0ff;color:#604780;font-size:11px;font-weight:800;line-height:1.9}.team-modal footer .archive-action{background:#397c74;color:#fff;font-weight:900}.team-modal footer .ghost-danger{background:#fff;color:#b91c1c}.archive-step{background:#d9f2ee;color:#397c74}.archive-browser-modal{width:440px}.program-archive-list{display:grid;gap:8px;max-height:360px;margin:14px 0;overflow:auto}.program-archive-list>button{display:grid;grid-template-columns:36px minmax(0,1fr) 20px;align-items:center;gap:10px;width:100%;padding:11px;border:1.5px solid #c9badd;border-radius:12px;background:#fff;text-align:right;font:inherit;cursor:pointer}.program-archive-list>button:hover{border-color:#72549a;background:#faf7ff}.program-archive-list i{display:grid;width:34px;height:34px;place-items:center;border-radius:9px;background:#eee6fa;color:#72549a;font-style:normal}.program-archive-list span{display:grid;gap:3px}.program-archive-list strong{color:#3a2e1f;font-size:12px}.program-archive-list small{color:#9a8b6a;font-size:9.5px}.program-archive-list b{color:#72549a;font-size:20px}
+@media(max-width:720px){.team-head-actions{gap:6px}.new-plan-btn{height:34px;padding:0 9px;font-size:10px}.new-plan-btn span{display:none}.new-plan-modal footer{display:grid;grid-template-columns:1fr}.new-plan-modal footer button{width:100%}}
+@media(max-width:720px){.archive-browser-btn{width:34px;height:34px;padding:0;justify-content:center;font-size:0}.archive-browser-btn>b{position:absolute;top:-6px;left:-6px}.archive-view-banner{align-items:stretch;flex-direction:column}.archive-view-banner button{width:100%}}
 </style>

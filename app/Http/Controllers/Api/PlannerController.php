@@ -13,11 +13,15 @@ use App\Models\FinanceObligation;
 use App\Models\FinanceObligationPayment;
 use App\Models\FinancialAccount;
 use App\Models\FollowUp;
+use App\Models\FourHourReport;
+use App\Models\FourHourReportCategory;
+use App\Models\FourHourReportItem;
 use App\Models\Goal;
 use App\Models\GoalMilestone;
 use App\Models\GoalPlanItem;
 use App\Models\GoalProgressLog;
 use App\Models\GroupTaskItem;
+use App\Models\GroupTaskArchive;
 use App\Models\GroupTaskProject;
 use App\Models\GroupDailyChecklistItem;
 use App\Models\MealEntry;
@@ -39,6 +43,14 @@ use Illuminate\Validation\Rule;
 class PlannerController extends Controller
 {
     private const GROUP_TASK_PERIODS = ['weekly', 'monthly', 'general'];
+
+    private const FOUR_HOUR_REPORT_CATEGORIES = [
+        ['name' => 'سلامتی', 'color' => '#10B981'],
+        ['name' => 'کاری', 'color' => '#2563EB'],
+        ['name' => 'آموزش', 'color' => '#8B5CF6'],
+        ['name' => 'زندگی', 'color' => '#F59E0B'],
+        ['name' => 'دست یاری', 'color' => '#EC4899'],
+    ];
 
     public function daily(Request $request)
     {
@@ -921,25 +933,6 @@ class PlannerController extends Controller
     {
         $userId = $request->user()->id;
         $today = now($request->user()->timezone)->toDateString();
-        $categories = Category::query()
-            ->where('user_id', $userId)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get();
-
-        $taskGroups = TaskGroup::query()
-            ->where('user_id', $userId)
-            ->where('is_active', true)
-            ->orderBy('category_id')
-            ->orderBy('sort_order')
-            ->get();
-
-        $projects = GroupTaskProject::query()
-            ->with(['taskGroup', 'items'])
-            ->where('user_id', $userId)
-            ->orderBy('category_id')
-            ->orderBy('sort_order')
-            ->get();
 
         return [
             'daily_checklist' => TeamDailyChecklistItem::query()
@@ -958,23 +951,65 @@ class PlannerController extends Controller
                     ->map(fn ($items, $date) => ['date' => $date, 'items' => $items->map(fn (GroupDailyChecklistItem $item) => $this->groupDailyChecklistItemPayload($item))->values()])
                     ->values(),
             ],
-            'sections' => $categories->map(fn (Category $category) => [
-                'id' => $category->id,
-                'name' => $category->name,
-                'color' => $category->color,
-                'soft_color' => $category->soft_color,
-                'groups' => $taskGroups
-                    ->where('category_id', $category->id)
-                    ->map(fn (TaskGroup $group) => $this->groupTaskCatalogPayload($group, $projects->contains('task_group_id', $group->id)))
-                    ->values(),
-                'projects' => $projects
-                    ->where('category_id', $category->id)
-                    ->groupBy('task_group_id')
-                    ->map(function ($projectRows) {
-                        return $this->groupTaskProjectPayload($this->mergedGroupTaskProject($projectRows->first()));
-                    })
-                    ->values(),
-            ])->values(),
+            'sections' => $this->groupTaskSections($userId),
+            'archives' => GroupTaskArchive::query()
+                ->where('user_id', $userId)
+                ->latest()
+                ->get()
+                ->map(fn (GroupTaskArchive $archive) => $this->groupTaskArchiveSummary($archive)),
+        ];
+    }
+
+    public function resetGroupTasks(Request $request)
+    {
+        $data = $request->validate([
+            'confirmation' => ['required', 'string', Rule::in(['حذف برنامه قبلی'])],
+            'archive_name' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $userId = $request->user()->id;
+        $archiveName = trim($data['archive_name'] ?? '');
+
+        [$deletedCount, $archive] = DB::transaction(function () use ($userId, $archiveName) {
+            $taskQuery = GroupTaskItem::query()
+                ->whereHas('project', fn ($query) => $query->where('user_id', $userId));
+            $taskCount = (clone $taskQuery)->count();
+            $archive = null;
+
+            if ($archiveName !== '') {
+                $archive = GroupTaskArchive::create([
+                    'user_id' => $userId,
+                    'name' => $archiveName,
+                    'task_count' => $taskCount,
+                    'snapshot' => $this->groupTaskSections($userId)->toArray(),
+                ]);
+            }
+
+            return [$taskQuery->delete(), $archive];
+        });
+
+        return [
+            'deleted_count' => $deletedCount,
+            'archive' => $archive ? $this->groupTaskArchiveSummary($archive) : null,
+        ];
+    }
+
+    public function groupTaskArchives(Request $request)
+    {
+        return GroupTaskArchive::query()
+            ->where('user_id', $request->user()->id)
+            ->latest()
+            ->get()
+            ->map(fn (GroupTaskArchive $archive) => $this->groupTaskArchiveSummary($archive));
+    }
+
+    public function showGroupTaskArchive(Request $request, GroupTaskArchive $archive)
+    {
+        abort_unless($archive->user_id === $request->user()->id, 404);
+
+        return [
+            ...$this->groupTaskArchiveSummary($archive),
+            'sections' => $archive->snapshot,
         ];
     }
 
@@ -1203,6 +1238,151 @@ class PlannerController extends Controller
         abort_unless($item->project?->user_id === $request->user()->id, 404);
 
         $item->delete();
+
+        return response()->noContent();
+    }
+
+    public function fourHourReports(Request $request)
+    {
+        $data = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+        $userId = $request->user()->id;
+        $date = $data['date'] ?? now($request->user()->timezone)->toDateString();
+        $this->ensureFourHourReportCategories($userId);
+
+        $categories = FourHourReportCategory::query()->where('user_id', $userId)->orderBy('sort_order')->orderBy('id')->get();
+        $reports = FourHourReport::query()->with(['category', 'items.category'])->where('user_id', $userId)
+            ->whereDate('report_date', $date)->orderBy('start_time')->get();
+        $totalMinutes = $reports->sum('duration_minutes');
+        $activityItems = $reports->flatMap->items;
+        $activityMinutes = $activityItems->sum('duration_minutes');
+        $wakeTime = DailyRoutine::query()->where('user_id', $userId)->whereDate('routine_date', $date)->value('wake_time');
+        $hasRoutineWakeTime = (bool) $wakeTime;
+        $wakeTime = $wakeTime ? substr($wakeTime, 0, 5) : '06:00';
+        $wakeMinutes = $this->clockMinutes($wakeTime);
+        $slots = collect(range(0, 3))->map(function (int $index) use ($wakeMinutes) {
+            $start = $wakeMinutes + ($index * 240);
+            $end = $start + 240;
+
+            return [
+                'index' => $index + 1,
+                'start_time' => sprintf('%02d:%02d', intdiv($start % 1440, 60), $start % 60),
+                'end_time' => sprintf('%02d:%02d', intdiv($end % 1440, 60), $end % 60),
+                'ends_next_day' => $end >= 1440,
+            ];
+        });
+
+        return [
+            'date' => $date,
+            'wake_time' => $wakeTime,
+            'wake_time_source' => $hasRoutineWakeTime ? 'routine' : 'default',
+            'slots' => $slots,
+            'categories' => $categories->map(fn (FourHourReportCategory $category) => $this->fourHourReportCategoryPayload($category)),
+            'reports' => $reports->map(fn (FourHourReport $report) => $this->fourHourReportPayload($report)),
+            'summary' => [
+                'report_count' => $reports->count(),
+                'total_minutes' => $totalMinutes,
+                'coverage_percent' => round(min(100, ($totalMinutes / 1440) * 100), 1),
+                'categories' => $categories->map(function (FourHourReportCategory $category) use ($activityItems, $activityMinutes) {
+                    $minutes = $activityItems->where('four_hour_report_category_id', $category->id)->sum('duration_minutes');
+
+                    return [
+                        ...$this->fourHourReportCategoryPayload($category),
+                        'minutes' => $minutes,
+                        'percent' => $activityMinutes > 0 ? round(($minutes / $activityMinutes) * 100, 1) : 0,
+                    ];
+                })->values(),
+            ],
+        ];
+    }
+
+    public function storeFourHourReportCategory(Request $request)
+    {
+        $data = $request->validate([
+            'name' => [
+                'required', 'string', 'max:50',
+                Rule::unique('four_hour_report_categories')->where(fn ($query) => $query->where('user_id', $request->user()->id)),
+            ],
+            'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
+
+        $category = FourHourReportCategory::create([
+            'user_id' => $request->user()->id,
+            'name' => trim($data['name']),
+            'color' => strtoupper($data['color']),
+            'sort_order' => FourHourReportCategory::where('user_id', $request->user()->id)->max('sort_order') + 1,
+            'is_default' => false,
+        ]);
+
+        return $this->fourHourReportCategoryPayload($category);
+    }
+
+    public function storeFourHourReport(Request $request)
+    {
+        $data = $request->validate([
+            'report_date' => ['required', 'date_format:Y-m-d'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i'],
+            'ends_next_day' => ['nullable', 'boolean'],
+            'items' => ['required', 'array', 'min:1', 'max:20'],
+            'items.*.category_id' => ['required', 'integer'],
+            'items.*.description' => ['required', 'string', 'max:1000'],
+            'items.*.duration_minutes' => ['required', 'integer', 'min:1', 'max:240'],
+        ]);
+        $userId = $request->user()->id;
+        $categoryIds = collect($data['items'])->pluck('category_id')->unique();
+        $categories = FourHourReportCategory::query()->where('user_id', $userId)->whereIn('id', $categoryIds)->get()->keyBy('id');
+        abort_unless($categories->count() === $categoryIds->count(), 422, 'یکی از دسته‌بندی‌ها معتبر نیست.');
+        $endsNextDay = (bool) ($data['ends_next_day'] ?? ($data['end_time'] <= $data['start_time']));
+        $start = Carbon::createFromFormat('H:i', $data['start_time']);
+        $end = Carbon::createFromFormat('H:i', $data['end_time']);
+        if ($endsNextDay) $end->addDay();
+        $durationMinutes = (int) $start->diffInMinutes($end);
+        abort_if($durationMinutes > 240, 422, 'هر گزارش می‌تواند حداکثر چهار ساعت باشد.');
+        abort_if(collect($data['items'])->sum('duration_minutes') > $durationMinutes, 422, 'جمع زمان فعالیت‌ها از بازه گزارش بیشتر است.');
+
+        $newStart = $this->clockMinutes($data['start_time']);
+        $newEnd = $this->clockMinutes($data['end_time']) + ($endsNextDay ? 1440 : 0);
+        $overlaps = FourHourReport::query()->where('user_id', $userId)->whereDate('report_date', $data['report_date'])->get()
+            ->contains(function (FourHourReport $report) use ($newStart, $newEnd) {
+                $existingStart = $this->clockMinutes($report->start_time);
+                $existingEnd = $this->clockMinutes($report->end_time) + ($report->ends_next_day ? 1440 : 0);
+
+                return $existingStart < $newEnd && $existingEnd > $newStart;
+            });
+        abort_if($overlaps, 422, 'این بازه زمانی با یک گزارش دیگر هم‌پوشانی دارد.');
+
+        $report = DB::transaction(function () use ($data, $userId, $durationMinutes, $categories, $endsNextDay) {
+            $firstItem = $data['items'][0];
+            $report = FourHourReport::create([
+                'user_id' => $userId,
+                'four_hour_report_category_id' => $firstItem['category_id'],
+                'report_date' => $data['report_date'],
+                'start_time' => $data['start_time'],
+                'end_time' => $data['end_time'],
+                'ends_next_day' => $endsNextDay,
+                'duration_minutes' => $durationMinutes,
+                'description' => collect($data['items'])->pluck('description')->map(fn ($value) => trim($value))->join("\n"),
+            ]);
+
+            foreach ($data['items'] as $index => $item) {
+                $report->items()->create([
+                    'four_hour_report_category_id' => $item['category_id'],
+                    'description' => trim($item['description']),
+                    'duration_minutes' => $item['duration_minutes'],
+                    'sort_order' => $index + 1,
+                ]);
+            }
+
+            return $report->load(['category', 'items.category']);
+        });
+
+        return $this->fourHourReportPayload($report);
+    }
+
+    public function destroyFourHourReport(Request $request, FourHourReport $report)
+    {
+        abort_unless($report->user_id === $request->user()->id, 404);
+        $report->delete();
 
         return response()->noContent();
     }
@@ -2858,6 +3038,86 @@ class PlannerController extends Controller
     private function groupDailyChecklistItemPayload(GroupDailyChecklistItem $item): array
     {
         return ['id' => $item->id, 'title' => $item->title, 'is_done' => $item->is_done, 'sort_order' => $item->sort_order];
+    }
+
+    private function groupTaskSections(int $userId)
+    {
+        $categories = Category::query()->where('user_id', $userId)->where('is_active', true)->orderBy('sort_order')->get();
+        $taskGroups = TaskGroup::query()->where('user_id', $userId)->where('is_active', true)->orderBy('category_id')->orderBy('sort_order')->get();
+        $projects = GroupTaskProject::query()->with(['taskGroup', 'items'])->where('user_id', $userId)->orderBy('category_id')->orderBy('sort_order')->get();
+
+        return $categories->map(fn (Category $category) => [
+            'id' => $category->id,
+            'name' => $category->name,
+            'color' => $category->color,
+            'soft_color' => $category->soft_color,
+            'groups' => $taskGroups->where('category_id', $category->id)
+                ->map(fn (TaskGroup $group) => $this->groupTaskCatalogPayload($group, $projects->contains('task_group_id', $group->id)))
+                ->values(),
+            'projects' => $projects->where('category_id', $category->id)
+                ->groupBy('task_group_id')
+                ->map(fn ($projectRows) => $this->groupTaskProjectPayload($this->mergedGroupTaskProject($projectRows->first())))
+                ->values(),
+        ])->values();
+    }
+
+    private function groupTaskArchiveSummary(GroupTaskArchive $archive): array
+    {
+        return [
+            'id' => $archive->id,
+            'name' => $archive->name,
+            'task_count' => $archive->task_count,
+            'created_at' => $archive->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function ensureFourHourReportCategories(int $userId): void
+    {
+        foreach (self::FOUR_HOUR_REPORT_CATEGORIES as $index => $category) {
+            FourHourReportCategory::firstOrCreate(
+                ['user_id' => $userId, 'name' => $category['name']],
+                ['color' => $category['color'], 'sort_order' => $index + 1, 'is_default' => true],
+            );
+        }
+    }
+
+    private function fourHourReportCategoryPayload(FourHourReportCategory $category): array
+    {
+        return [
+            'id' => $category->id,
+            'name' => $category->name,
+            'color' => $category->color,
+            'is_default' => $category->is_default,
+        ];
+    }
+
+    private function fourHourReportPayload(FourHourReport $report): array
+    {
+        $report->loadMissing(['category', 'items.category']);
+
+        return [
+            'id' => $report->id,
+            'report_date' => $report->report_date->toDateString(),
+            'start_time' => substr($report->start_time, 0, 5),
+            'end_time' => substr($report->end_time, 0, 5),
+            'ends_next_day' => $report->ends_next_day,
+            'duration_minutes' => $report->duration_minutes,
+            'description' => $report->description,
+            'category' => $this->fourHourReportCategoryPayload($report->category),
+            'items' => $report->items->map(fn (FourHourReportItem $item) => [
+                'id' => $item->id,
+                'description' => $item->description,
+                'duration_minutes' => $item->duration_minutes,
+                'category' => $this->fourHourReportCategoryPayload($item->category),
+            ])->values(),
+        ];
+    }
+
+    private function clockMinutes(string $time): int
+    {
+        [$hour, $minute] = array_map('intval', explode(':', substr($time, 0, 5)));
+
+        return ($hour * 60) + $minute;
     }
 
     private function groupTaskProjectPayload(GroupTaskProject $project): array
